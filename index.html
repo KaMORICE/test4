@@ -1,0 +1,2087 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chasse au Trésor — Arkteos</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0D1B4B;
+    --navy-mid: #1A2E6F;
+    --navy-light: #243A8A;
+    --gold: #C9973A;
+    --gold-light: #E8BC6A;
+    --gold-pale: #F5E6C8;
+    --cream: #FAF7F2;
+    --cream-dark: #EDE8DE;
+    --text-dark: #0D1B4B;
+    --text-mid: #3D4F7A;
+    --text-light: #7A8DB5;
+    --green: #2A6B4F;
+    --green-light: #E6F4EE;
+    --red: #8B2020;
+    --amber: #7A4F10;
+    --border: rgba(13,27,75,0.12);
+    --shadow: 0 4px 24px rgba(13,27,75,0.10);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Barlow Condensed', sans-serif; }
+
+  body {
+    font-family: 'Barlow Condensed', sans-serif;
+    letter-spacing: 0.04em;
+    background: var(--cream);
+    color: var(--text-dark);
+    min-height: 100vh;
+    overflow: hidden; /* critical for slide transitions */
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(201,151,58,0.06) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(13,27,75,0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ===== ROUTER / PAGE SYSTEM ===== */
+  #router {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .page {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    will-change: transform;
+    background: var(--cream);
+    /* Start off-screen to the right */
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1;
+  }
+
+  .page.page-active {
+    transform: translateX(0);
+    z-index: 2;
+  }
+
+  /* The page sliding OUT goes left */
+  .page.page-exit {
+    transform: translateX(-30%);
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* Splash is the root — it never slides from right on first load */
+  .page#page-splash {
+    transform: translateX(0);
+  }
+
+  .page-inner {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    padding: 0 0 3rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ===== HEADER ===== */
+  .app-header {
+    background: var(--navy);
+    padding: 1.5rem 1.5rem 1.25rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .app-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%);
+  }
+  .app-header::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    border: 1px solid rgba(201,151,58,0.15);
+  }
+  .header-eyebrow {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .header-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.15;
+    margin-bottom: 4px;
+  }
+  .header-sub {
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+    font-weight: 300;
+  }
+  .header-meta {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .header-pill {
+    background: rgba(201,151,58,0.15);
+    border: 1px solid rgba(201,151,58,0.3);
+    border-radius: 99px;
+    font-size: 11px;
+    color: var(--gold-light);
+    padding: 3px 10px;
+  }
+
+  /* ===== PROGRESS ===== */
+  .progress-wrap { padding: 1rem 1.5rem 0; }
+  .progress-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .progress-label { font-size: 12px; color: var(--text-light); }
+  .progress-count { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700; color: var(--navy); }
+  .progress-track { height: 4px; background: var(--cream-dark); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--navy) 0%, var(--gold) 100%); border-radius: 99px; transition: width 0.5s cubic-bezier(.4,0,.2,1); }
+
+  /* ===== SPLASH ===== */
+  #page-splash .page-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem 1.5rem 3rem;
+    min-height: 100vh;
+  }
+  #page-splash::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(201,151,58,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(13,27,75,0.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .splash-logo {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.28em;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+    position: relative;
+  }
+  .splash-trophy {
+    font-size: 60px;
+    margin-bottom: 1.25rem;
+    animation: floatTrophy 3s ease-in-out infinite;
+    position: relative;
+  }
+  @keyframes floatTrophy {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  .splash-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 48px;
+    font-weight: 800;
+    color: var(--navy);
+    line-height: 1.05;
+    margin-bottom: 0.5rem;
+    position: relative;
+  }
+  .splash-title span { color: var(--gold); }
+  .splash-sub {
+    font-size: 16px;
+    color: var(--text-light);
+    margin-bottom: 2rem;
+    font-weight: 300;
+    position: relative;
+  }
+  .splash-pills {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 2.5rem;
+    position: relative;
+  }
+  .splash-pill {
+    background: var(--navy);
+    color: var(--gold-light);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: 99px;
+  }
+  .splash-hint {
+    font-size: 13px;
+    color: var(--text-light);
+    margin-bottom: 2rem;
+    line-height: 1.55;
+    max-width: 260px;
+    position: relative;
+  }
+  .btn-enter {
+    background: var(--navy);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    padding: 1rem 2.5rem;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s;
+    letter-spacing: 0.03em;
+    margin-bottom: 2.5rem;
+    box-shadow: 0 4px 20px rgba(13,27,75,0.2);
+    position: relative;
+  }
+  .btn-enter:hover { background: var(--navy-mid); transform: translateY(-2px); box-shadow: 0 8px 28px rgba(13,27,75,0.25); }
+  .btn-enter:active { transform: translateY(0); }
+  .splash-footer {
+    font-size: 11px;
+    color: var(--text-light);
+    opacity: 0.5;
+    position: relative;
+  }
+
+
+
+  /* ===== OVERVIEW ===== */
+  .overview-team {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 1rem 1.5rem 0;
+  }
+  .ov-team-badge {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    background: var(--navy);
+    color: #fff;
+    padding: 4px 14px;
+    border-radius: 99px;
+  }
+
+
+  .steps-list { padding: 1rem 1.5rem; display: flex; flex-direction: column; gap: 8px; }
+  .step-row {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 0.875rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .step-row:hover { border-color: var(--navy-light); box-shadow: var(--shadow); }
+  .step-row.locked { opacity: 0.55; cursor: default; }
+  .step-row.locked:hover { border-color: var(--border); box-shadow: none; }
+  .step-row.is-current { border-color: var(--gold); }
+  .step-row.is-current::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--gold);
+    border-radius: 99px 0 0 99px;
+  }
+  .srow-num {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    background: var(--cream-dark);
+    color: var(--text-mid);
+  }
+  .srow-num.done { background: var(--navy); color: #fff; }
+  .srow-num.current { background: var(--gold-pale); color: var(--gold); border: 1.5px solid var(--gold); }
+  .srow-info { flex: 1; min-width: 0; }
+  .srow-title { font-size: 14px; font-weight: 500; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .srow-title.muted { color: var(--text-light); }
+  .srow-meta { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+  .srow-icon { font-size: 14px; flex-shrink: 0; }
+  .diff-pill { font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 99px; flex-shrink: 0; }
+  .diff-facile { background: #E6F4EE; color: #2A6B4F; }
+  .diff-moyen { background: #FDF3E3; color: #7A4F10; }
+  .diff-difficile { background: #FAEDED; color: #8B2020; }
+
+  .ov-cta { padding: 0 1.5rem; margin-top: 0.5rem; }
+  .btn-primary {
+    width: 100%;
+    background: var(--navy);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 0.875rem;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s;
+    letter-spacing: 0.02em;
+  }
+  .btn-primary:hover { background: var(--navy-mid); transform: translateY(-1px); box-shadow: var(--shadow); }
+
+  /* ===== STEP ===== */
+  .step-back-row {
+    padding: 1rem 1.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .btn-back {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 5px 14px;
+    font-size: 12px;
+    color: var(--text-mid);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .btn-back:hover { border-color: var(--navy); color: var(--navy); }
+  .step-team-pill {
+    font-size: 11px;
+    background: var(--navy);
+    color: var(--gold-light);
+    padding: 3px 12px;
+    border-radius: 99px;
+    font-weight: 500;
+  }
+  .step-content-wrap { padding: 1rem 1.5rem; }
+  .step-eyebrow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .step-num-badge {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: var(--text-light);
+    text-transform: uppercase;
+  }
+  .step-diff-pill { font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 99px; }
+  .step-main-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--navy);
+    line-height: 1.2;
+    margin-bottom: 1rem;
+  }
+  .info-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1rem 1.125rem;
+    margin-bottom: 10px;
+  }
+  .info-card-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    margin-bottom: 6px;
+  }
+  .info-card-text { font-size: 14px; line-height: 1.65; color: var(--text-dark); white-space: pre-wrap; }
+  .info-card-text code {
+    display: block;
+    font-family: 'Courier New', monospace;
+    font-size: 15px;
+    letter-spacing: 0.15em;
+    background: var(--cream-dark);
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin: 4px 0;
+    color: var(--navy);
+  }
+  .info-card.lieu-card { background: var(--cream); }
+  .info-card.hint-card { background: #EBF3FF; border-color: rgba(13,27,75,0.12); }
+  .info-card.hint-card .info-card-label { color: var(--navy-light); }
+  .info-card.hint-card .info-card-text { color: var(--navy); }
+
+  .locked-state {
+    background: var(--cream-dark);
+    border: 1px dashed rgba(13,27,75,0.2);
+    border-radius: 16px;
+    padding: 2rem 1.5rem;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  .lock-icon {
+    width: 52px; height: 52px;
+    background: var(--navy);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px;
+    font-size: 22px;
+  }
+  .lock-title { font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+  .lock-sub { font-size: 13px; color: var(--text-light); margin-bottom: 1.25rem; line-height: 1.5; }
+
+  .pw-row { display: flex; gap: 8px; }
+  .pw-multi { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  .pw-input {
+    flex: 1;
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--navy);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .pw-input:focus { border-color: var(--navy); }
+  .pw-input.error { border-color: var(--red); animation: shake 0.3s; }
+  .btn-unlock {
+    background: var(--navy);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 0.75rem 1.125rem;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn-unlock:hover { background: var(--navy-mid); }
+  .btn-unlock-full { width: 100%; margin-top: 2px; }
+  .pw-error { font-size: 12px; color: var(--red); margin-top: 6px; text-align: center; min-height: 18px; }
+
+  .unlock-next-card {
+    background: var(--gold-pale);
+    border: 1px solid rgba(201,151,58,0.3);
+    border-radius: 14px;
+    padding: 1rem 1.125rem;
+    margin-bottom: 10px;
+  }
+  .unlock-next-label { font-size: 10px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--amber); margin-bottom: 6px; }
+  .unlock-next-sub { font-size: 13px; color: var(--amber); margin-bottom: 10px; }
+
+  .success-card {
+    background: var(--green-light);
+    border: 1px solid rgba(42,107,79,0.2);
+    border-radius: 14px;
+    padding: 1rem 1.125rem;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  .success-icon { font-size: 24px; margin-bottom: 6px; }
+  .success-text { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700; color: var(--green); }
+
+  .final-card {
+    background: var(--navy);
+    border-radius: 16px;
+    padding: 1.5rem;
+    text-align: center;
+    margin-bottom: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .final-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 0%, rgba(201,151,58,0.2) 0%, transparent 60%);
+  }
+  .final-icon { font-size: 36px; margin-bottom: 10px; position: relative; }
+  .final-title { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 800; color: var(--gold-light); margin-bottom: 6px; position: relative; }
+  .final-sub { font-size: 13px; color: rgba(255,255,255,0.6); position: relative; line-height: 1.5; }
+
+  .step-nav { display: flex; gap: 8px; margin-top: 0.5rem; }
+  .btn-nav {
+    flex: 1;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem;
+    font-size: 13px;
+    color: var(--text-mid);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+  .btn-nav:hover { border-color: var(--navy); color: var(--navy); }
+  .btn-nav:disabled { opacity: 0.3; cursor: default; }
+  .btn-nav:disabled:hover { border-color: var(--border); color: var(--text-mid); }
+
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+  }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--cream-dark); border-radius: 99px; }
+
+
+/* ===== QUIZ ===== */
+.quiz-wrap { display:flex; flex-direction:column; gap:14px; }
+.quiz-header { display:flex; justify-content:space-between; align-items:center; }
+.quiz-score { font-size:13px; color:var(--c-text2); font-weight:600; }
+.quiz-qnum { font-size:12px; font-weight:700; color:var(--c-accent); letter-spacing:.05em; text-transform:uppercase; }
+.quiz-question { font-size:16px; font-weight:700; color:var(--c-text); line-height:1.5; }
+.quiz-mode-label { font-size:12px; color:var(--c-text2); margin-bottom:4px; text-align:center; }
+.quiz-mode-row { display:flex; gap:10px; justify-content:center; margin-bottom:4px; }
+.mode-btn { flex:1; max-width:120px; border-radius:14px; padding:14px 8px; font-size:13px; font-weight:700; border:2px solid; cursor:pointer; background:var(--c-card); display:flex; flex-direction:column; align-items:center; gap:4px; transition:all .18s; }
+.mode-btn .mode-icon { font-size:22px; }
+.mode-btn .mode-pts { font-size:11px; font-weight:600; opacity:.7; }
+.mode-btn.duo { border-color:#3B82F6; color:#3B82F6; }
+.mode-btn.carre { border-color:#8B5CF6; color:#8B5CF6; }
+.mode-btn.cash { border-color:#F59E0B; color:#F59E0B; }
+.mode-btn:hover { filter:brightness(1.1); transform:scale(1.03); }
+.quiz-answers { display:flex; flex-direction:column; gap:8px; }
+.quiz-ans-btn { background:var(--c-card); border:1.5px solid var(--c-border); border-radius:12px; padding:13px 16px; font-size:14px; font-weight:500; color:var(--c-text); cursor:pointer; text-align:left; transition:all .15s; }
+.quiz-ans-btn:hover:not(:disabled) { border-color:var(--c-accent); color:var(--c-accent); }
+.quiz-ans-btn.correct { background:#E1F5EE; border-color:#22C55E; color:#085041; font-weight:700; }
+.quiz-ans-btn.wrong { background:#FFECEC; border-color:#EF4444; color:#7C1D1D; }
+.quiz-ans-btn:disabled { cursor:default; }
+.cash-row { display:flex; gap:8px; }
+.cash-row input { flex:1; }
+.quiz-feedback { text-align:center; font-size:14px; font-weight:600; padding:10px 14px; border-radius:10px; }
+.quiz-feedback.ok { background:#E1F5EE; color:#085041; }
+.quiz-feedback.ko { background:#FFECEC; color:#7C1D1D; }
+.quiz-next-btn { width:100%; padding:13px; border-radius:12px; font-size:15px; font-weight:700; background:var(--c-accent); color:#fff; border:none; cursor:pointer; }
+.quiz-next-btn:hover { filter:brightness(1.1); }
+.quiz-result { text-align:center; padding:24px 0 8px; }
+.quiz-result-emoji { font-size:52px; margin-bottom:8px; }
+.quiz-result-title { font-size:22px; font-weight:800; color:var(--c-text); margin-bottom:6px; }
+.quiz-result-sub { font-size:14px; color:var(--c-text2); line-height:1.6; }
+
+/* ===== QUIZ TIMER ===== */
+.quiz-timer-bar { height: 6px; border-radius: 3px; background: var(--c-border); margin-bottom: 10px; overflow: hidden; }
+.quiz-timer-fill { height: 100%; border-radius: 3px; background: var(--c-accent); transition: width 1s linear; }
+.quiz-timer-fill.warning { background: #F59E0B; }
+.quiz-timer-fill.danger { background: #EF4444; }
+.quiz-timer-num { font-size: 12px; font-weight: 700; text-align: right; margin-bottom: 6px; }
+.quiz-timer-num.warning { color: #F59E0B; }
+.quiz-timer-num.danger { color: #EF4444; }
+
+/* ===== HANOI ===== */
+.hanoi-wrap { display:flex; flex-direction:column; align-items:center; gap:14px; }
+.hanoi-info { display:flex; justify-content:space-between; width:100%; font-size:13px; color:var(--c-text2); font-weight:600; }
+.hanoi-board { display:flex; justify-content:space-around; align-items:flex-end; width:100%; height:180px; background:var(--c-background-secondary,#f5f0e8); border-radius:14px; padding:12px 8px 0; border:0.5px solid var(--c-border); position:relative; }
+.hanoi-peg-wrap { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; flex:1; height:100%; cursor:pointer; position:relative; padding-bottom:8px; }
+.hanoi-peg-wrap:hover .hanoi-rod { background:#8B5CF6; }
+.hanoi-peg-wrap.selected .hanoi-rod { background:#F59E0B; }
+.hanoi-rod { width:6px; height:140px; background:#94A3B8; border-radius:3px; position:absolute; bottom:8px; }
+.hanoi-base { width:90%; height:6px; background:#94A3B8; border-radius:3px; margin-bottom:2px; position:absolute; bottom:2px; }
+.hanoi-disks { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:140px; position:absolute; bottom:8px; width:100%; gap:2px; }
+.hanoi-disk { height:18px; border-radius:9px; transition:all .2s; border:2px solid rgba(0,0,0,.15); }
+.hanoi-peg-label { position:absolute; bottom:-18px; font-size:11px; font-weight:700; color:var(--c-text2); }
+.hanoi-msg { font-size:13px; color:var(--c-text2); text-align:center; min-height:18px; }
+.hanoi-msg.error { color:#EF4444; }
+.hanoi-msg.success { color:#22C55E; font-weight:700; }
+.hanoi-btns { display:flex; gap:8px; width:100%; }
+.hanoi-btns button { flex:1; }
+
+/* ===== MEMORY GAME ===== */
+.memory-wrap { display:flex; flex-direction:column; gap:14px; }
+.memory-timer-bar { height:6px; border-radius:3px; background:var(--c-border); overflow:hidden; }
+.memory-timer-fill { height:100%; border-radius:3px; background:#22C55E; transition:width 1s linear; }
+.memory-timer-fill.warning { background:#F59E0B; }
+.memory-timer-fill.danger { background:#EF4444; }
+.memory-timer-num { text-align:right; font-size:12px; font-weight:700; color:var(--c-text2); margin-bottom:4px; }
+.memory-timer-num.warning { color:#F59E0B; }
+.memory-timer-num.danger { color:#EF4444; }
+.memory-words-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+.memory-word { background:var(--c-background-secondary,#f5f0e8); border:0.5px solid var(--c-border); border-radius:8px; padding:6px 4px; text-align:center; font-size:12px; font-weight:600; color:var(--c-text); }
+.memory-input-area { display:flex; flex-direction:column; gap:10px; }
+.memory-found-grid { display:flex; flex-wrap:wrap; gap:6px; min-height:32px; }
+.memory-found-chip { background:#E1F5EE; border:1px solid #22C55E; border-radius:20px; padding:4px 10px; font-size:12px; font-weight:600; color:#085041; }
+.memory-score-bar { display:flex; justify-content:space-between; font-size:13px; font-weight:700; color:var(--c-text2); }
+.memory-input-row { display:flex; gap:8px; }
+.memory-input-row input { flex:1; }
+.memory-phase-label { font-size:13px; font-weight:700; color:var(--c-text); }
+.memory-result { text-align:center; padding:16px 0 8px; }
+.memory-result-emoji { font-size:48px; margin-bottom:8px; }
+.memory-result-title { font-size:20px; font-weight:800; color:var(--c-text); margin-bottom:6px; }
+.memory-result-sub { font-size:14px; color:var(--c-text2); line-height:1.6; }
+
+/* ===== WORD SEARCH ===== */
+.ws-wrap { display:flex; flex-direction:column; gap:12px; }
+.ws-grid { display:grid; grid-template-columns:repeat(15,1fr); gap:2px; user-select:none; }
+.ws-cell { aspect-ratio:1; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; border-radius:4px; cursor:pointer; border:1px solid var(--c-border); background:var(--c-background-primary); color:var(--c-text); transition:background .1s; -webkit-tap-highlight-color:transparent; }
+.ws-cell:hover { background:var(--c-background-secondary); }
+.ws-cell.selecting { background:#FEF3C7; border-color:#F59E0B; }
+.ws-cell.found-0 { background:#DBEAFE; color:#1D4ED8; border-color:#93C5FD; }
+.ws-cell.found-1 { background:#DCF5E7; color:#166534; border-color:#6EE7B7; }
+.ws-cell.found-2 { background:#EDE9FE; color:#6D28D9; border-color:#C4B5FD; }
+.ws-cell.found-3 { background:#FEE2E2; color:#991B1B; border-color:#FCA5A5; }
+.ws-cell.found-4 { background:#FEF3C7; color:#92400E; border-color:#FCD34D; }
+.ws-cell.found-5 { background:#FCE7F3; color:#9D174D; border-color:#F9A8D4; }
+.ws-cell.found-6 { background:#ECFDF5; color:#065F46; border-color:#6EE7B7; }
+.ws-cell.found-7 { background:#F0F9FF; color:#0C4A6E; border-color:#7DD3FC; }
+.ws-cell.found-8 { background:#FFF7ED; color:#9A3412; border-color:#FDBA74; }
+.ws-cell.found-9 { background:#F5F3FF; color:#4C1D95; border-color:#A78BFA; }
+.ws-cell.found-10 { background:#ECFDF5; color:#14532D; border-color:#86EFAC; }
+.ws-cell.found-11 { background:#FFF1F2; color:#9F1239; border-color:#FDA4AF; }
+.ws-cell.found-12 { background:#FFFBEB; color:#78350F; border-color:#FDE68A; }
+.ws-cell.found-13 { background:#EFF6FF; color:#1E3A5F; border-color:#BFDBFE; }
+.ws-word-list { display:flex; flex-wrap:wrap; gap:6px; }
+.ws-word-chip { font-size:12px; font-weight:600; padding:4px 10px; border-radius:20px; border:1px solid var(--c-border); background:var(--c-background-secondary); color:var(--c-text2); }
+.ws-word-chip.found { text-decoration:line-through; opacity:.5; }
+.ws-progress { font-size:13px; font-weight:700; color:var(--c-text2); }
+</style>
+</head>
+<body>
+
+<div id="router">
+
+  <!-- PAGE: Splash -->
+  <div id="page-splash" class="page page-active">
+    <div class="page-inner">
+      <div class="splash-logo">Arkteos 2026</div>
+      <div class="splash-trophy">🏆</div>
+      <h1 class="splash-title">Chasse au<br><span>Trésor</span></h1>
+      <p class="splash-sub">Course d'orientation · Plein air</p>
+      <div class="splash-pills">
+        <span class="splash-pill">10 étapes</span>
+        <span class="splash-pill">1h15</span>
+        <span class="splash-pill">8 équipes</span>
+        <span class="splash-pill">55 participants</span>
+      </div>
+      <p class="splash-hint">Chaque équipe a son propre parcours et ses mots de passe.</p>
+      <button class="btn-enter" onclick="navigate('overview')">Démarrer</button>
+      <div class="splash-footer">Chasse au trésor Arkteos · Confidentiel</div>
+    </div>
+  </div>
+
+
+
+  <!-- PAGE: Overview -->
+  <div id="page-overview" class="page">
+    <div class="page-inner">
+      <div class="app-header">
+        <div class="header-eyebrow">Arkteos · Kerkesaud</div>
+        <div class="header-title">Votre Parcours</div>
+        <div class="header-sub">Suivez votre progression ci-dessous</div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-top">
+          <span class="progress-label" id="ov-progress-label">0 étape complétée</span>
+          <span class="progress-count" id="ov-progress-count">0 / 10</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="ov-progress-fill" style="width:0%"></div></div>
+      </div>
+      <div class="overview-team">
+        <span class="ov-team-badge" id="ov-team-badge">Équipe 1</span>
+      </div>
+      <div class="steps-list" id="steps-list"></div>
+      <div class="ov-cta">
+        <button class="btn-primary" onclick="goCurrentStep()">Aller à l'étape en cours →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: Step -->
+  <div id="page-step" class="page">
+    <div class="page-inner">
+      <div class="app-header">
+        <div class="header-eyebrow">Arkteos · Kerkesaud</div>
+        <div class="header-title" id="sh-title">—</div>
+        <div class="header-sub" id="sh-sub">—</div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-top">
+          <span class="progress-label" id="st-progress-label"></span>
+          <span class="progress-count" id="st-progress-count"></span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="st-progress-fill" style="width:0%"></div></div>
+      </div>
+      <div class="step-back-row">
+        <button class="btn-back" onclick="navigate('overview', 'back')">← Retour</button>
+        <span class="step-team-pill" id="st-team-pill">Équipe —</span>
+      </div>
+      <div class="step-content-wrap" id="step-content-wrap"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ===== DATA =====
+const STEPS = [
+  { num:1, title:"Le Commencement", diff:"facile",
+    lieu:"Point de départ — Open Space ARKTEOS",
+    texte:"Votre objectif est de trouver 8 images réparties sur tous le site de Kerkesaud, et de les ramener à l'acceuil dans 1h15. Pour pouvoir avancer, prouvez que vous connaissez bien ARKTEOS !\n\nCitez, dans l'ordre, les valeurs de l'entreprise.\n\nUne fois l'épreuve validée, récupérez votre première enveloppe.",
+    mecanique:"Épreuve orale — chaque membre cite une valeur Arkteos avant de repartir." },
+  { num:2, title:"La Carte Trouée", diff:"moyen",
+    lieu:"À vous de trouver où aller !",
+    texte:"Une fois arrivé au bon endroit vous trouverez une feuille cartonnée percée de 4 trous.\n\nPosez-la exactement sur le plan du domaine fourni au départ. Les 4 trous révèlent 4 lettres cachées.\n\nCes lettres forment un mot : c'est le nom du lieu où vous devez vous rendre ensuite.",
+    mecanique:"Utilisez le calque + le plan du domaine fourni dans votre kit." },
+  { num:3, title:"Le Lieu Mystère", diff:"moyen",
+    lieu:"Résolvez cette énigme pour trouver l'indice suivant",
+    texte:"Je suis le témoin de tous les serments, le gardien des larmes de joie et des promesses éternelles. Les fleurs m'ornent, la musique m'emplit, et deux âmes y deviennent une. Qui suis-je ?",
+    mecanique:"Cherchez la boîte étanche à l'endroit où l'on y entre." },
+  { num:4, title:"Le Message Brouillé", diff:"moyen",
+    lieu:"Chaque jour je vous accueille, mais jamais je ne mange. Je porte vos plats, vos rires et vos échanges. On me quitte pressé, on me retrouve avec faim. Qui suis-je ?",
+    texte:"Déchiffrez ce message :\n\n`-.. . ..- - ... -.-. ....`\n`... .. --. -. .- .-..`\n`.. -. -.. .. ...- .. -.. ..- . .-..`\n`... . .--. - .. --.- ..- .`\n`.... ..- .. - .-. .`",
+    mecanique:"Si vous avez besoin de quelque chose n'utilisez pas votre téléphone, demandez le aux organisatrices." },
+  { num:5, title:"La Photo Mystère", diff:"moyen",
+    lieu:"À retrouver sur le site",
+    texte:"Voici une photo zoomée à l'extrême d'un détail du domaine. Retrouvez l'endroit exact dont elle est tirée et récupérez-y l'indice caché.",
+    image:"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBw8PDRAPDRAPDRAQEBANDQ4PDw8ODQ4NFhEWFhURFRUYICggGBolGxUTITEhJSkrLi4uFx8zODMsNygtLisBCgoKBQUFDgUFDisZExkrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrK//AABEIAL8BBwMBIgACEQEDEQH/xAAbAAEAAwEBAQEAAAAAAAAAAAAAAQIDBAUGB//EADwQAAIBAQQFCQYFAwUAAAAAAAABAhEDITFBBAVRcYESYXKRobHB0fATMjNCUoIUInOSokNi4SNTY8Li/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AP3EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIlJLFpZX7QJAbIi01VXp4NXpgSAck9PinRRnN40ilhxYHWDzrTWjWFhbPfG7sqc89dTX9JR6U2uzkgeyDwHrq1eHsl1vxM5azt386W6EfGoH0YPmJaZbPG1m91I9xX2k3jOb3zkwPqTOVvBYyit8kj5lxrjfvbY5KA+hlp9iv6keDr3GctaWK+ZvdGR4V21daI5S2ge3LW9nkpvgl4mctcLKD4ySPH5aIdovVwHtR1ws4Pg0XWtrPNSXBeZ4PtV441JVpzY8zA+gWs7La1wZotPsn864po+bU3szpkTy3fzOmIH00dKs3hOPWi6toPCUXs/Mj5dt33q6lMTp1e27RVymvAD6IAAAAAAAAAAAAAPFt9Iak05SxuV7vTPaPn9Km1O5J1bV+QG34mX1T/AJCOkSSopSSVyueBkpT/ALe0nlT5utgbrSJ/VLHM5XOSlyoujwvo7uJsm7q7TF+QFvxlpW/kul6qsy61hK6sVwckYyjeUpgB1PTk/eh2p160Q7Wxbvsl+yHectAB1TsrGUfyRo10ksMLnQ8yaknS+tcK02eaPV0HBql1b+ow1gkpRSuvXADgalfzc7IVm7qtXqruZo/m3rvFb1u8AM/Z3YvGmCuJ9mqvG6mfOTlxJzfDvAqrNXXVuzvyJUVsWOznGzd4D12gT67CVl6zK+XgSsvWYErDj5B4PeQst/kHg94F5fNwOnVvxF+p5HLL5uB1as+Iv1APogAAAAAAAAAAAAA+e0xVn9zPoTwNJ5XtHyfqdbsqgXiiaFFCX1dg5E/q7ANJ3U3mEvI1aapV1vMZeQF3jwKNYF8+BGwDNoguyrA6NErk6fmv6jHWfvrejfQo9jr2HPrT319oHJ9XDvGa3eBFfe4d4zW7wAjLiTm+HeVy4k5vh3gPLwJ9dpXZu8CfXaBPl4BYr1mR5eBMcuICOXS8iXg+kVjgul5EvB9IC8/n3o69WfEX6jOOfz714nZqv4i/UYH0IAAAAAAAAAAAAAeBpUW7R0dPzOu6p7585rBf6mfvvB0zA0Vj/e+sey/vfYZKxXP+5k+yW2X7mBq40Sv5V5lJ4cC/ISSxvebqZyy4Aa58CNhOfAjJAQyrLsowOjQ41rlR389xza099fadOhxrXKjrvuOXWvvr7QOT6uHeM1u8CNvrMbN3gBGXEnPq7yMuI/x3gPXYTt9ZlcvWwl5+swJ8vAmPy8fEr5eBMfl4+IExwXS8iXg+kVj8vS8i2T6QFp/PvR2aq+IunI4pYT3o7dVfEXTkB9CCKkgAAAAAAAAAAAPn9LjW0d6VJN37z6A8PTLBqcpzj+VOT5TVVjiBVU+pE3bUS9Fl/t/wRSFg5KsYcpPBqCp3ATa0oqOt/kYzNZaPOl1nJX5QaKQjVpZ37KVTwA0z4EZGjspbPEo4S3AVZRl3BkOzAvo17XS/6s59a++vtOzRIX7nXsZxa2+J+0Dk28O8bN3gQlj6zLKLqt3gBXLiP8d4uuq0uKqKrne5c4D12EvP1mEtkXxaRZpq98mO8CF4eBMV7vHxEWtrl0VXuJVhKTwk1ztJARGOHM6l1DvqdMNGk/pj1s3hoe2T4USA4nDHnvOjVbfKTdz5TdNlx3WehwzVd7bOqysorBU3AaxNEVjQsmBIAAAAAAAAAAFZX7OJYgDOXK5upmb5aVFRbonQAOKatPqfYedb6tlJqlpOFK05PJi6t1d6R7tA4oDxoWdrGKXK9pSl8qxm97XkWekWixg/slGVf3JHquzRm7ADznpazhJbawcn/GpH4iybpWK3vkPqZ3uwM3YAcej6XYzr7OVaNJ1TVJOtMVzM4tat8uqpgr3ftPTnosWqUxudKqvUcdvq9SarekqJSv3X9YHk8v8A5K80aPuvJ5Kfy2k9/wD6Z7ENEWxF/wALzAePGzllCMd7r2JGkbCf1U6MUu+p6n4Z7Cy0Z7APMWi7XJ/c13GtnosVhFJ7aXnoLRnsNFozA44WRvCzOiOjs0VgwMIxNEjVWJZWQGcUaIsrMsoAVRZE8kmgEkkEgAAAAAAAAAAAAAAgkAQCQBBFCwAo4IpKwRsAMFYE+yNgBj7IlWZqAKKBKiWAEUJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//Z",
+    mecanique:"Observez, comparez, explorez. L'indice est sur place une fois le bon endroit trouvé." },
+  { num:6, title:"Mot Codé", diff:"moyen",
+    lieu:"À vous de le deviner !",
+    texte:"Pour savoir où aller, résolvez le mot codé !",
+    mecanique:"" },
+  { num:7, title:"La Chaîne de Précision", diff:"moyen",
+    lieu:"À côté du réservoir d'eau",
+    texte:"Chez Arkteos, chaque maillon compte. Un seul raté, et c'est toute la chaîne qui s'effondre.\n\nRègles :\n• Une cible est posée à 5 mètres\n• Chaque membre lance un cerceau\n• L'équipe doit atteindre un total de 200 points",
+    mecanique:"" },
+  { num:8, title:"Tout le monde veut prendre sa place", diff:"moyen",
+    lieu:"Là où le futur des enfants se prépare",
+    texte:"QUIZ",
+    mecanique:"",
+    quiz: [
+      {
+        question: "Où a lieu le festival des Vieilles Charrues ?",
+        duo: ["Carhaix", "Quimper"],
+        carre: ["Carhaix", "Quimper", "Brest", "Rennes"],
+        cash: "carhaix",
+        correct: 0
+      },
+      {
+        question: "Simone Veil a été la 1ère femme à présider le Parlement européen. Vrai ou faux ?",
+        duo: ["Vrai", "Faux"],
+        carre: ["Vrai", "Faux", "Elle en était vice-présidente", "Elle n'a jamais siégé au Parlement"],
+        cash: "vrai",
+        correct: 0
+      },
+      {
+        question: "Que crée Napoléon en 1802 pour former les futures élites de la nation ?",
+        duo: ["Les lycées", "Les grandes écoles"],
+        carre: ["Les lycées", "Les grandes écoles", "Les universités", "Les académies"],
+        cash: "lycée",
+        correct: 0
+      },
+      {
+        question: "Quel est le département le moins peuplé de France ?",
+        duo: ["La Lozère", "La Creuse"],
+        carre: ["La Lozère", "La Creuse", "L'Ariège", "Le Cantal"],
+        cash: "lozère",
+        correct: 0
+      },
+      {
+        question: "Quelle est la préfecture du Finistère ?",
+        duo: ["Quimper", "Brest"],
+        carre: ["Quimper", "Brest", "Morlaix", "Douarnenez"],
+        cash: "quimper",
+        correct: 0
+      },
+      {
+        question: "Où auront lieu les prochains Jeux Olympiques d'hiver ?",
+        duo: ["Alpes françaises", "Pyrénées espagnoles"],
+        carre: ["Alpes françaises", "Pyrénées espagnoles", "Alpes suisses", "Scandinavie"],
+        cash: "alpes",
+        correct: 0
+      },
+      {
+        question: "Quelles mers ou océans relie le détroit d'Ormuz ?",
+        duo: ["Golfe Persique et Golfe d'Oman", "Mer Rouge et Mer d'Arabie"],
+        carre: ["Golfe Persique et Golfe d'Oman", "Mer Rouge et Mer d'Arabie", "Mer Caspienne et Mer Noire", "Océan Indien et Golfe d'Aden"],
+        cash: "persique",
+        correct: 0
+      },
+      {
+        question: "Quel est l'artiste le plus écouté sur Spotify en 2025 ?",
+        duo: ["Bad Bunny", "Taylor Swift"],
+        carre: ["Bad Bunny", "Taylor Swift", "Drake", "The Weeknd"],
+        cash: "bad bunny",
+        correct: 0
+      },
+      {
+        question: "Combien de cœurs possède une pieuvre ?",
+        duo: ["3", "2"],
+        carre: ["3", "2", "1", "4"],
+        cash: "3",
+        correct: 0
+      },
+      {
+        question: "Que signifie « Kouign-amann » en breton ?",
+        duo: ["Gâteau au beurre", "Pain au lait"],
+        carre: ["Gâteau au beurre", "Pain au lait", "Tarte aux pommes", "Brioche salée"],
+        cash: "beurre",
+        correct: 0
+      },
+      {
+        question: "Qui a écrit L'Avare ?",
+        duo: ["Molière", "Racine"],
+        carre: ["Molière", "Racine", "Corneille", "La Fontaine"],
+        cash: "molière",
+        correct: 0
+      },
+      {
+        question: "Qui dirige l'école Poudlard dans le dernier Harry Potter ?",
+        duo: ["Rogue", "Dumbledore"],
+        carre: ["Rogue", "Dumbledore", "McGonagall", "Ombrage"],
+        cash: "rogue",
+        correct: 0
+      },
+      {
+        question: "Où se situe le plus grand canyon d'Europe ?",
+        duo: ["Les Gorges du Verdon", "Les Gorges du Tarn"],
+        carre: ["Les Gorges du Verdon", "Les Gorges du Tarn", "Les Gorges de l'Ardèche", "Les Gorges du Doubs"],
+        cash: "gorges du verdon",
+        correct: 0
+      },
+      {
+        question: "Qui est entré au Panthéon en juin 2026 ?",
+        duo: ["Marc Bloch", "Albert Camus"],
+        carre: ["Marc Bloch", "Albert Camus", "Simone de Beauvoir", "René Char"],
+        cash: "bloch",
+        correct: 0
+      },
+      {
+        question: "Qui a gagné la Palme d'or à Cannes en 2025 ?",
+        duo: ["It Was Just an Accident", "La Substance"],
+        carre: ["It Was Just an Accident", "La Substance", "Emilia Pérez", "The Brutalist"],
+        cash: "accident",
+        correct: 0
+      }
+    ]
+  },
+  { num:9, title:"Le Mot Mêlé", diff:"difficile",
+    lieu:"Zone éloignée — bout du parcours",
+    texte:"WORDSEARCH",
+    mecanique:"" },
+  { num:10, title:"Le Trésor Final", diff:"difficile",
+    lieu:"Point de rassemblement central",
+    texte:"À chaque étape de cette quête vous avez récupéré un fragment d'image.\n\nAssemblez-les pour trouver l'image mystère et rapportez-la au point de rassemblement central.\n\nL'équipe qui aura achevé cette étape en premier remportera cette chasse au trésor !",
+    mecanique:"" }
+];
+
+const MIDDLE = [2,3,4,5,6,7,8,9];
+function rotateMiddle(arr, n) {
+  const a = [...arr];
+  for(let i=0;i<n;i++) a.push(a.shift());
+  return a;
+}
+const TEAM_ORDERS = Array.from({length:8}, (_,i) => [1, ...rotateMiddle(MIDDLE,i), 10]);
+
+const PASSWORDS = [
+  ["ARKTEOS","ARKTEOS","TOUR","les Terrasses De Kerjoam","26178","PARCOURS","MISSION","Travail d'équipe","4","ARKTEOS"],
+  ["EQUIPE","NATURE","SECRET","BRUME","AVENTURE","DECODER","TRIOMPHE","COFFRE","ETOILE","DOMAINE"],
+  ["TEAMWORK","CHEMIN","MYSTERE","OMBRE","EXPLORER","TROUVER","SUCCES","BUTIN","AURORE","BRETAGNE"],
+  ["COURAGE","SENTIER","CODE","NUAGE","CHERCHER","VALIDER","BRAVO","CADENAS","ZENITH","KERKESAUD"],
+  ["SQUAD","HERBE","INDICE","PLUIE","COURIR","DECODER","GAGNANT","MEDAILLE","MATIN","DOMAINE"],
+  ["FORCE","ARBRE","CLEF","VENT","AVANCER","RESOUDRE","CHAMPION","RECOMPENS","AUBE","KERKESAUD"],
+  ["GROUPE","PIERRE","SIGNAL","ROSEE","DECOUVRIR","TROUVER","VAINQUEUR","TROPHEE","HORIZON","BRETAGNE"],
+  ["SPIRIT","MOUSSE","PISTE","BROUILL","EXPLORER","DECODER","GAGNANT","BUTIN","LEVER","KERKESAUD"]
+];
+
+// ===== STATE =====
+let currentTeam = 0; // Équipe 1 uniquement
+let currentStepIdx = 0;
+const unlocked = {};
+
+function key(t,s) { return `${t}_${s}`; }
+function isUnlocked(t,s) { return s===0 || !!unlocked[key(t,s)]; }
+function doUnlock(t,s) { unlocked[key(t,s)] = true; }
+
+function getProgress(t) {
+  const order = TEAM_ORDERS[t];
+  let done = 0;
+  for(let i=0;i<order.length-1;i++) { if(isUnlocked(t,i+1)) done = i+1; }
+  // Count last step as completed if all previous are unlocked
+  if(done === order.length-1) done = order.length;
+  return done;
+}
+
+// ===== ROUTER =====
+let currentPage = 'splash';
+let transitioning = false;
+
+function navigate(to, direction = 'forward') {
+  if (transitioning || to === currentPage) return;
+  transitioning = true;
+
+  const fromEl = document.getElementById('page-' + currentPage);
+  const toEl   = document.getElementById('page-' + to);
+
+  // Render the destination before animating
+  if (to === 'overview') renderOverview();
+
+  if (direction === 'forward') {
+    // to starts at right (default), from slides to left
+    toEl.style.transition = 'none';
+    toEl.style.transform = 'translateX(100%)';
+    toEl.classList.add('page-active');
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        toEl.style.transition = '';
+        toEl.style.transform = 'translateX(0)';
+        fromEl.style.transform = 'translateX(-30%)';
+        fromEl.style.pointerEvents = 'none';
+      });
+    });
+  } else {
+    // Back: to starts at left, from slides to right
+    toEl.style.transition = 'none';
+    toEl.style.transform = 'translateX(-30%)';
+    toEl.classList.add('page-active');
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        toEl.style.transition = '';
+        toEl.style.transform = 'translateX(0)';
+        fromEl.style.transition = 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)';
+        fromEl.style.transform = 'translateX(100%)';
+        fromEl.style.pointerEvents = 'none';
+      });
+    });
+  }
+
+  setTimeout(() => {
+    fromEl.classList.remove('page-active');
+    fromEl.style.transform = '';
+    fromEl.style.transition = '';
+    fromEl.style.pointerEvents = '';
+    // Scroll to top of new page
+    toEl.scrollTop = 0;
+    currentPage = to;
+    transitioning = false;
+  }, 360);
+}
+
+function goOverview() { navigate('overview', 'forward'); }
+function goStep(idx) {
+  currentStepIdx = idx;
+  renderStep(idx);
+  navigate('step', 'forward');
+}
+function goCurrentStep() {
+  const order = TEAM_ORDERS[currentTeam];
+  let idx = 0;
+  for(let i=0;i<order.length;i++) { if(isUnlocked(currentTeam,i)) idx=i; }
+  goStep(idx);
+}
+
+// ===== RENDER OVERVIEW =====
+function renderOverview() {
+  const t = currentTeam;
+  const order = TEAM_ORDERS[t];
+  const prog = getProgress(t);
+  const pct = Math.round((prog/order.length)*100);
+
+  document.getElementById('ov-team-badge').textContent = `Équipe ${t+1}`;
+  document.getElementById('ov-progress-label').textContent = `${prog} étape${prog>1?'s':''} complétée${prog>1?'s':''}`;
+  document.getElementById('ov-progress-count').textContent = `${prog} / ${order.length}`;
+  document.getElementById('ov-progress-fill').style.width = pct+'%';
+
+  const list = document.getElementById('steps-list');
+  list.innerHTML = '';
+
+  order.forEach((stepNum, idx) => {
+    const step = STEPS.find(s=>s.num===stepNum);
+    const unlk = isUnlocked(t,idx);
+    const nextUnlk = isUnlocked(t,idx+1);
+    const isDone = unlk && (idx<order.length-1 ? nextUnlk : true);
+    const isCurrent = unlk && !isDone;
+
+    const row = document.createElement('div');
+    row.className = `step-row ${!unlk?'locked':''} ${isCurrent&&!isDone?'is-current':''}`;
+
+    const numClass = isDone?'done':isCurrent?'current':'';
+    const numContent = isDone ? '✓' : (idx+1);
+
+    row.innerHTML = `
+      <div class="srow-num ${numClass}">${numContent}</div>
+      <div class="srow-info">
+        <div class="srow-title ${!unlk?'muted':''}">${step.title}</div>
+        <div class="srow-meta">${isDone?'Complétée':isCurrent?'En cours':'Verrouillée'}</div>
+      </div>
+      <span class="diff-pill diff-${step.diff}">${step.diff==='facile'?'Facile':step.diff==='moyen'?'Moyen':'Difficile'}</span>
+      ${!unlk?'<span class="srow-icon">🔒</span>':isDone?'<span class="srow-icon">✅</span>':'<span class="srow-icon">▶</span>'}
+    `;
+    if(unlk) row.onclick = () => goStep(idx);
+    list.appendChild(row);
+  });
+}
+
+// ===== RENDER STEP =====
+function renderStep(idx) {
+  const t = currentTeam;
+  const order = TEAM_ORDERS[t];
+  const stepNum = order[idx];
+  const step = STEPS.find(s=>s.num===stepNum);
+  const unlk = isUnlocked(t,idx);
+  const prog = getProgress(t);
+
+  document.getElementById('sh-title').textContent = step.title;
+  document.getElementById('sh-sub').textContent = `Étape ${idx+1} sur ${order.length}`;
+  document.getElementById('st-team-pill').textContent = `Équipe ${t+1}`;
+
+  const pct = Math.round(((idx+1)/order.length)*100);
+  document.getElementById('st-progress-fill').style.width = pct+'%';
+  document.getElementById('st-progress-label').textContent = `Étape ${idx+1} / ${order.length}`;
+  document.getElementById('st-progress-count').textContent = prog+' complétées';
+
+  const wrap = document.getElementById('step-content-wrap');
+  const diffLabel = step.diff==='facile'?'Facile':step.diff==='moyen'?'Moyen':'Difficile';
+
+  let html = `
+    <div class="step-eyebrow">
+      <span class="step-num-badge">Étape ${idx+1} · ${order.length}</span>
+      <span class="step-diff-pill diff-${step.diff}">${diffLabel}</span>
+    </div>
+    <h1 class="step-main-title">${step.title}</h1>
+    <div class="info-card lieu-card">
+      <div class="info-card-label">📍 Lieu</div>
+      <div class="info-card-text">${step.lieu}</div>
+    </div>
+  `;
+
+  if(!unlk) {
+    if(idx === 0) {
+      html += `
+        <div class="locked-state">
+          <div class="lock-icon">🔒</div>
+          <div class="lock-title">Étape verrouillée</div>
+          <div class="lock-sub">Saisissez les 4 valeurs de l'entreprise (dans n'importe quel ordre) pour déverrouiller cette étape.</div>
+          <div class="pw-multi">
+            <input class="pw-input" id="pw-0" type="text" placeholder="Valeur 1" onkeydown="if(event.key==='Enter')tryUnlockMulti(${idx})">
+            <input class="pw-input" id="pw-1" type="text" placeholder="Valeur 2" onkeydown="if(event.key==='Enter')tryUnlockMulti(${idx})">
+            <input class="pw-input" id="pw-2" type="text" placeholder="Valeur 3" onkeydown="if(event.key==='Enter')tryUnlockMulti(${idx})">
+            <input class="pw-input" id="pw-3" type="text" placeholder="Valeur 4" onkeydown="if(event.key==='Enter')tryUnlockMulti(${idx})">
+          </div>
+          <button class="btn-unlock btn-unlock-full" onclick="tryUnlockMulti(${idx})">Valider</button>
+          <div class="pw-error" id="pw-error"></div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="locked-state">
+          <div class="lock-icon">🔒</div>
+          <div class="lock-title">Étape verrouillée</div>
+          <div class="lock-sub">Complétez l'étape précédente et saisissez le mot de passe pour accéder à cette mission.</div>
+          <div class="pw-row">
+            <input class="pw-input" id="pw-field" type="text" placeholder="MOT DE PASSE"
+              onkeydown="if(event.key==='Enter')tryUnlock(${idx})">
+            <button class="btn-unlock" onclick="tryUnlock(${idx})">Valider</button>
+          </div>
+          <div class="pw-error" id="pw-error"></div>
+        </div>
+      `;
+    }
+  } else {
+    if(step.texte === 'HANOI') {
+      html += renderHanoi(step.num);
+      setTimeout(()=>hanoiRender(step.num), 50);
+    } else if(step.texte === 'MEMORY') {
+      html += renderMemoryGame(step.num);
+      setTimeout(()=>memoryStartTimer(step.num), 100);
+    } else if(step.texte === 'WORDSEARCH') {
+      html += renderWsGame(step.num);
+    } else if(!step.quiz) {
+      html += `<div class="info-card">
+        <div class="info-card-label">🎯 Mission</div>
+        <div class="info-card-text">${step.texte.replace(/\`([^\`]+)\`/g, '<code>$1</code>')}</div>
+        ${step.image ? '<img src="'+step.image+'" style="width:100%;border-radius:10px;margin-top:12px;">' : ''}
+      </div>`;
+    }
+    html += `
+      ${step.mecanique && idx > 1 ? `
+      <div class="info-card hint-card">
+        <div class="info-card-label">💡 Indice</div>
+        <div class="info-card-text">${step.mecanique}</div>
+      </div>` : ''}
+    ${step.quiz ? renderQuiz(step.num, step) : ''}
+    `;
+    // Timer starts only when user clicks 'C'est parti'
+    if(step.quiz){ setTimeout(()=>{ const b=document.getElementById('btn-cest-parti'); if(b) b.scrollIntoView({behavior:'smooth',block:'nearest'}); },100); }
+
+    if(idx < order.length-1) {
+      const nextUnlk = isUnlocked(t,idx+1);
+      if(!nextUnlk) {
+        if(idx === 0) {
+          html += `
+            <div class="unlock-next-card">
+              <div class="unlock-next-label">🔑 Débloquer l'étape suivante</div>
+              <div class="unlock-next-sub">Saisissez les 4 valeurs de l'entreprise (dans n'importe quel ordre).</div>
+              <div class="pw-multi">
+                <input class="pw-input" id="pw-0" type="text" placeholder="Valeur 1" onkeydown="if(event.key==='Enter')tryUnlockMulti(${idx})">
+                <input class="pw-input" id="pw-1" type="text" placeholder="Valeur 2" onkeydown="if(event.key==='Enter')tryUnlockMulti(${idx})">
+                <input class="pw-input" id="pw-2" type="text" placeholder="Valeur 3" onkeydown="if(event.key==='Enter')tryUnlockMulti(${idx})">
+                <input class="pw-input" id="pw-3" type="text" placeholder="Valeur 4" onkeydown="if(event.key==='Enter')tryUnlockMulti(${idx})">
+              </div>
+              <button class="btn-unlock btn-unlock-full" onclick="tryUnlockMulti(${idx})">Valider</button>
+              <div class="pw-error" id="pw-next-error"></div>
+            </div>
+          `;
+        } else {
+          // For quiz/memory/hanoi steps, unlock card is handled inside the game result
+          if(!step.quiz && step.texte !== 'MEMORY' && step.texte !== 'HANOI' && step.texte !== 'WORDSEARCH') {
+            html += `
+              <div class="unlock-next-card">
+                <div class="unlock-next-label">🔑 Débloquer l'étape suivante</div>
+                <div class="unlock-next-sub">Une fois l'énigme résolue, saisissez le mot de passe pour continuer.</div>
+                <div class="pw-row">
+                  <input class="pw-input" id="pw-next" type="text" placeholder="MOT DE PASSE"
+                    onkeydown="if(event.key==='Enter')tryUnlockNext(${idx})">
+                  <button class="btn-unlock" onclick="tryUnlockNext(${idx})">Valider</button>
+                </div>
+                <div class="pw-error" id="pw-next-error"></div>
+              </div>
+            `;
+          }
+        }
+      } else {
+        html += `
+          <div class="success-card">
+            <div class="success-icon">✅</div>
+            <div class="success-text">Étape suivante déverrouillée !</div>
+          </div>
+        `;
+      }
+    } else {
+      html += `
+        <div class="final-card">
+          <div class="final-icon">🏆</div>
+          <div class="final-title">Bravo Équipe ${t+1} !</div>
+          <div class="final-sub">Vous avez complété toutes les étapes du parcours.</div>
+        </div>
+      `;
+    }
+  }
+
+  html += `
+    <div class="step-nav">
+      <button class="btn-nav" onclick="prevStep(${idx})" ${idx===0?'disabled':''}>← Précédente</button>
+      <button class="btn-nav" onclick="nextStep(${idx})" ${idx>=order.length-1?'disabled':''}>Suivante →</button>
+    </div>
+  `;
+
+  wrap.innerHTML = html;
+  document.getElementById('page-step').scrollTop = 0;
+}
+
+function prevStep(idx) { currentStepIdx = idx-1; renderStep(idx-1); }
+function nextStep(idx) { currentStepIdx = idx+1; renderStep(idx+1); }
+
+function normalize(s) {
+  return s.trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/[''`\-]/g, " ")  // apostrophes and dashes → space
+    .replace(/\s+/g, " ")      // collapse spaces
+    .trim();
+}
+
+// Pre-normalized expected answers
+const STEP1_ANSWERS = [
+  "innovation",
+  "developpement durable",
+  "esprit d equipe",
+  "service client"
+];
+
+function tryUnlockMulti(idx) {
+  const inputs = [0,1,2,3].map(i => normalize(document.getElementById('pw-'+i)?.value || ''));
+  const expected = STEP1_ANSWERS.map(normalize);
+  const allFound = expected.every(e => inputs.some(inp => inp === e));
+  if(allFound) {
+    doUnlock(currentTeam, idx+1);
+    renderStep(idx);
+  } else {
+    [0,1,2,3].forEach(i => {
+      const inp = document.getElementById('pw-'+i);
+      if(inp) { inp.classList.add('error'); setTimeout(() => inp.classList.remove('error'), 400); }
+    });
+    const err = document.getElementById('pw-next-error');
+    if(err) { err.textContent = 'Une ou plusieurs valeurs incorrectes — réessayez !'; setTimeout(() => { if(err) err.textContent=''; }, 2500); }
+  }
+}
+
+// Alias : plusieurs réponses acceptées pour certaines étapes [équipe][étape]
+const PASSWORD_ALIASES = {
+  '0_3': ['les terrasses de kerjoam', 'terrasses de kerjoam'],
+  '0_4': ['26178', '2 6 1 7 8', '26 178', '2617 8'],
+  '0_5': ['baby shark dance', 'babysharkdance', 'baby shark', 'babysharky'],
+  '1_5': ['baby shark dance', 'babysharkdance', 'baby shark', 'babysharky'],
+  '2_5': ['baby shark dance', 'babysharkdance', 'baby shark', 'babysharky'],
+  '3_5': ['baby shark dance', 'babysharkdance', 'baby shark', 'babysharky'],
+  '4_5': ['baby shark dance', 'babysharkdance', 'baby shark', 'babysharky'],
+  '5_5': ['baby shark dance', 'babysharkdance', 'baby shark', 'babysharky'],
+  '6_5': ['baby shark dance', 'babysharkdance', 'baby shark', 'babysharky'],
+  '7_5': ['baby shark dance', 'babysharkdance', 'baby shark', 'babysharky'],
+  '0_7': ['travail d equipe', 'travail equipe', 'travail d equipe', 'travail dequipe'],
+  '0_8': ['quatre'],
+};
+function isValidPassword(t, stepIdx, val) {
+  const k = `${t}_${stepIdx}`;
+  // Pour les codes purement numériques, on ignore tous les espaces
+  const valNoSpaces = val.replace(/\s+/g, '');
+  if(PASSWORD_ALIASES[k] && PASSWORD_ALIASES[k].some(a => {
+    const n = normalize(a);
+    return n === val || n.replace(/\s+/g,'') === valNoSpaces;
+  })) return true;
+  const exp = normalize(PASSWORDS[t][stepIdx]);
+  return exp === val || (exp.replace(/\s+/g,'') === valNoSpaces && /^\d+$/.test(valNoSpaces));
+}
+
+function tryUnlock(idx) {
+  const t = currentTeam;
+  const val = normalize(document.getElementById('pw-field')?.value||'');
+  if(isValidPassword(t, idx, val)) {
+    doUnlock(t,idx);
+    renderStep(idx);
+  } else {
+    const input = document.getElementById('pw-field');
+    const err = document.getElementById('pw-error');
+    if(input) { input.classList.add('error'); setTimeout(()=>input.classList.remove('error'),400); }
+    if(err) { err.textContent = 'Mot de passe incorrect — réessayez !'; setTimeout(()=>{if(err)err.textContent='';},2500); }
+  }
+}
+
+function tryUnlockNext(idx) {
+  const t = currentTeam;
+  const val = normalize(document.getElementById('pw-next')?.value||'');
+  if(isValidPassword(t, idx+1, val)) {
+    doUnlock(t,idx+1);
+    renderStep(idx);
+  } else {
+    const input = document.getElementById('pw-next');
+    const err = document.getElementById('pw-next-error');
+    if(input) { input.classList.add('error'); setTimeout(()=>input.classList.remove('error'),400); }
+    if(err) { err.textContent = 'Mot de passe incorrect — réessayez !'; setTimeout(()=>{if(err)err.textContent='';},2500); }
+  }
+}
+
+
+
+// ===== QUIZ ENGINE =====
+const quizState = {};
+function shuffleArr(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;}
+function initQuiz(n){ if(!quizState[n]) quizState[n]={ q:0, score:0, answered:false, mode:null, order:null, started:false }; }
+function getQuizOrder(step, state){ if(!state.order) state.order=shuffleArr(step.quiz.map((_,i)=>i)); return state.order; }
+
+function startQuiz(stepNum){
+  const state = quizState[stepNum];
+  state.started = true;
+  refreshQuiz(stepNum);
+}
+
+function renderQuiz(stepNum, step){
+  initQuiz(stepNum);
+  const state = quizState[stepNum];
+  const qs = step.quiz;
+  const order = getQuizOrder(step, state);
+  if(!state.started) return `<div id="quiz-wrap">
+    <div class="info-card quiz-wrap">
+      <div class="info-card-label">📋 Consignes</div>
+      <div style="font-size:14px;line-height:1.8;color:var(--c-text);">
+        Vous allez devoir répondre à une série de questions. Pour cela vous aurez le choix entre :<br><br>
+        <strong>2️⃣ DUO</strong> — 2 propositions → <strong>2 pts</strong><br>
+        <strong>⬛ CARRÉ</strong> — 4 propositions → <strong>4 pts</strong><br>
+        <strong>💰 CASH</strong> — écrire la réponse → <strong>5 pts</strong><br><br>
+        Vous aurez <strong>5 secondes</strong> pour choisir entre DUO, CARRÉ et CASH, puis un temps limité pour répondre.<br><br>
+        Pour passer à la suite, vous devez avoir au moins <strong>30 points</strong>.
+      </div>
+    </div>
+    <div style="position:sticky;bottom:0;padding:12px 0 16px;background:var(--cream,#f5f0e8);z-index:10;">
+      <button class="quiz-next-btn" onclick="startQuiz(${stepNum})" style="color:#000;">C'est parti ! 🚀</button>
+    </div>
+  </div>`;
+  if(state.q >= order.length || state.score >= 30) return renderQuizResult(stepNum, step);
+  const q = qs[order[state.q]];
+  const modeChosen = state.mode !== null;
+  let answersHtml = '';
+  if(modeChosen){
+    if(state.mode === 'cash'){
+      answersHtml = `<div class="cash-row">
+        <input type="text" id="cash-input" placeholder="Votre réponse…" onkeydown="if(event.key==='Enter')answerCash(${stepNum})">
+        <button onclick="answerCash(${stepNum})">Valider</button>
+      </div>`;
+    } else {
+      const opts = state.mode === 'duo' ? q.duo : q.carre;
+      const shuffledOpts = shuffleArr(opts.map((a,i)=>({text:a,origIdx:i})));
+      state._shuffledOpts = shuffledOpts;
+      answersHtml = `<div class="quiz-answers">${shuffledOpts.map((o,i)=>`<button class="quiz-ans-btn" id="ans-${i}" onclick="answerMCQ(${i},${stepNum})">${o.text}</button>`).join('')}</div>`;
+    }
+  }
+  const pts = state.mode === 'duo' ? 2 : state.mode === 'carre' ? 4 : state.mode === 'cash' ? 5 : 0;
+  return `<div class="info-card quiz-wrap" id="quiz-wrap">
+    <div class="quiz-timer-num" id="quiz-timer-num"></div>
+    <div class="quiz-timer-bar"><div class="quiz-timer-fill" id="quiz-timer-fill"></div></div>
+    <div class="quiz-header">
+      <span class="quiz-qnum">Question ${state.q+1} • Score : ${state.score} pts</span>
+      <span class="quiz-score">Objectif : 30 pts</span>
+    </div>
+    <div class="quiz-question">${q.question}</div>
+    ${!modeChosen ? `
+      <div class="quiz-mode-label">Choisissez votre mode de réponse :</div>
+      <div class="quiz-mode-row">
+        <button class="mode-btn duo" onclick="chooseMode('duo',${stepNum})">
+          <span class="mode-icon">2️⃣</span><span>Duo</span><span class="mode-pts">2 pts</span>
+        </button>
+        <button class="mode-btn carre" onclick="chooseMode('carre',${stepNum})">
+          <span class="mode-icon">⬛</span><span>Carré</span><span class="mode-pts">4 pts</span>
+        </button>
+        <button class="mode-btn cash" onclick="chooseMode('cash',${stepNum})">
+          <span class="mode-icon">💰</span><span>Cash</span><span class="mode-pts">5 pts</span>
+        </button>
+      </div>` : `
+      <div class="quiz-mode-label" style="margin-bottom:0">Mode : <strong>${state.mode === 'duo' ? '2️⃣ Duo (2 pts)' : state.mode === 'carre' ? '⬛ Carré (4 pts)' : '💰 Cash (5 pts)'}</strong></div>
+      ${answersHtml}
+      <div class="quiz-feedback" id="quiz-feedback" style="display:none"></div>
+
+    `}
+  </div>`;
+}
+
+let quizTimerInterval = null;
+function clearQuizTimer(){ if(quizTimerInterval){ clearInterval(quizTimerInterval); quizTimerInterval = null; } }
+
+function startTimer(seconds, onExpire, warningAt=10, dangerAt=5){
+  clearQuizTimer();
+  let remaining = seconds;
+  const total = seconds;
+  function tick(){
+    const fill = document.getElementById('quiz-timer-fill');
+    const num = document.getElementById('quiz-timer-num');
+    if(!fill || !num){ clearQuizTimer(); return; }
+    const pct = (remaining / total) * 100;
+    fill.style.width = pct + '%';
+    num.textContent = remaining + 's';
+    const cls = remaining <= dangerAt ? 'danger' : remaining <= warningAt ? 'warning' : '';
+    fill.className = 'quiz-timer-fill' + (cls ? ' '+cls : '');
+    num.className = 'quiz-timer-num' + (cls ? ' '+cls : '');
+    if(remaining <= 0){ clearQuizTimer(); onExpire(); return; }
+    remaining--;
+  }
+  tick();
+  quizTimerInterval = setInterval(tick, 1000);
+}
+
+function chooseMode(mode, stepNum){
+  clearQuizTimer();
+  const state = quizState[stepNum];
+  state.mode = mode;
+  state.answered = false;
+  refreshQuiz(stepNum);
+  // Timer depends on mode
+  const secs = mode === 'duo' ? 10 : mode === 'carre' ? 20 : 30;
+  startTimer(secs, ()=>{ autoExpireAnswer(stepNum); }, Math.floor(secs*0.3), Math.floor(secs*0.15));
+}
+
+function autoExpireMode(stepNum){
+  // Default to cash
+  const state = quizState[stepNum];
+  if(state.mode === null){
+    state.mode = 'cash';
+    state.answered = false;
+    refreshQuiz(stepNum);
+    startTimer(30, ()=>{ autoExpireAnswer(stepNum); }, 9, 5);
+  }
+}
+
+function autoExpireAnswer(stepNum){
+  const state = quizState[stepNum];
+  if(state.answered) return;
+  state.answered = true;
+  // Show timeout feedback and move on
+  const fb = document.getElementById('quiz-feedback');
+  if(fb){ fb.className='quiz-feedback ko'; fb.textContent='⏱ Temps écoulé !'; fb.style.display='block'; }
+  document.querySelectorAll('.quiz-ans-btn').forEach(b=>b.disabled=true);
+  const inp = document.getElementById('cash-input');
+  if(inp) inp.disabled = true;
+  // Highlight correct answer
+  const step = STEPS.find(s=>s.num===stepNum);
+  const order = getQuizOrder(step, state);
+  const q = step.quiz[order[state.q]];
+  if(state.mode !== 'cash'){
+    const shuffledOpts = state._shuffledOpts || [];
+    const cIdx = shuffledOpts.findIndex(o=>o.origIdx===q.correct);
+    const btn = document.getElementById('ans-'+cIdx);
+    if(btn) btn.classList.add('correct');
+  }
+  setTimeout(()=>nextQuestion(stepNum), 2000);
+}
+
+function answerMCQ(idx, stepNum){
+  const state = quizState[stepNum];
+  if(state.answered) return;
+  state.answered = true;
+  const step = STEPS.find(s=>s.num===stepNum);
+  const order = getQuizOrder(step, state);
+  const q = step.quiz[order[state.q]];
+  const shuffledOpts = state._shuffledOpts || [];
+  // Find the correct answer's position in the shuffled array
+  const correctIdx = shuffledOpts.findIndex(o => o.origIdx === q.correct);
+  document.querySelectorAll('.quiz-ans-btn').forEach(b=>b.disabled=true);
+  if(idx === correctIdx){
+    state.score += state.mode === 'duo' ? 2 : 4;
+    document.getElementById('ans-'+idx).classList.add('correct');
+    showFeedback('ok', state.mode === 'duo' ? '✅ Bonne réponse ! +2 pts' : '✅ Bonne réponse ! +4 pts');
+  } else {
+    document.getElementById('ans-'+idx).classList.add('wrong');
+    if(document.getElementById('ans-'+correctIdx)) document.getElementById('ans-'+correctIdx).classList.add('correct');
+    showFeedback('ko', '❌ Raté ! La bonne réponse était : ' + (shuffledOpts[correctIdx] ? shuffledOpts[correctIdx].text : ''));
+  }
+  clearQuizTimer();
+  setTimeout(()=>nextQuestion(stepNum), 2000);
+}
+
+function answerCash(stepNum){
+  const state = quizState[stepNum];
+  if(state.answered) return;
+  state.answered = true;
+  const step = STEPS.find(s=>s.num===stepNum);
+  const order = getQuizOrder(step, state);
+  const q = step.quiz[order[state.q]];
+  const val = (document.getElementById('cash-input')?.value||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const expected = q.cash.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  if(val.includes(expected) || expected.includes(val)){
+    state.score += 5;
+    showFeedback('ok', '✅ Bonne réponse ! +5 pts');
+  } else {
+    showFeedback('ko', '❌ Raté ! La réponse attendue était : ' + q.cash);
+  }
+  clearQuizTimer();
+  setTimeout(()=>nextQuestion(stepNum), 2000);
+}
+
+function showFeedback(type, msg){
+  const fb = document.getElementById('quiz-feedback');
+  if(!fb) return;
+  fb.className = 'quiz-feedback ' + type;
+  fb.textContent = msg;
+  fb.style.display = 'block';
+}
+
+function nextQuestion(stepNum){
+  clearQuizTimer();
+  const state = quizState[stepNum];
+  state.q++;
+  state.answered = false;
+  state.mode = null;
+  refreshQuiz(stepNum);
+}
+
+function refreshQuiz(stepNum){
+  clearQuizTimer();
+  const step = STEPS.find(s=>s.num===stepNum);
+  const state = quizState[stepNum];
+  const wrap = document.getElementById('quiz-wrap');
+  const html = renderQuiz(stepNum, step);
+  if(wrap) wrap.outerHTML = html;
+  else { const sc = document.getElementById('step-content-wrap'); if(sc) sc.innerHTML += html; }
+  // Start appropriate timer only if quiz has started
+  if(state && state.started && state.mode === null && state.score < 30 && state.q < (getQuizOrder(step,state)||[]).length){
+    startTimer(5, ()=>{ autoExpireMode(stepNum); }, 3, 2);
+  }
+}
+
+function renderQuizResult(stepNum, step){
+  const state = quizState[stepNum];
+  const max = step.quiz.length * 5;
+  const MIN_SCORE = 30;
+  const passed = state.score >= MIN_SCORE;
+  const pct = Math.round(state.score/max*100);
+  const emoji = passed ? (pct === 100 ? '🏆' : '🎉') : '😅';
+  // Auto-unlock next step if passed
+  if(passed) {
+    const t = currentTeam;
+    const order = TEAM_ORDERS[t];
+    const idx = order.findIndex(n => STEPS[n-1] && STEPS[n-1].num === stepNum);
+    if(idx >= 0 && idx < order.length-1) unlocked[key(t, idx+1)] = true;
+  }
+  const t = currentTeam;
+  const teamOrder = TEAM_ORDERS[t];
+  const stepIdx = teamOrder.findIndex(n => STEPS[n-1] && STEPS[n-1].num === stepNum);
+  const nextIdx = stepIdx + 1;
+
+  return `<div class="info-card quiz-wrap">
+    <div class="quiz-result">
+      <div class="quiz-result-emoji">${emoji}</div>
+      ${passed
+        ? `<div class="quiz-result-sub" style="font-size:17px;font-weight:700;">Bien joué, vous pouvez continuer !</div>`
+        : `<div class="quiz-result-title">${state.score} / ${max} points</div>
+           <div class="quiz-result-sub" style="font-weight:600;color:#E65C00;margin-top:6px;">Rendez-vous au réfectoire pour pouvoir continuer !</div>`
+      }
+    </div>
+    ${passed ? `
+    <div class="unlock-next-card" style="margin-top:12px;">
+      <div class="unlock-next-label">❓ Question bonus</div>
+      <div class="unlock-next-sub">Combien y a-t-il d'entreprises dans le bâtiment en face de vous ?</div>
+      <div class="pw-row" style="margin-top:8px;">
+        <input class="pw-input" type="text" id="bonus-input" placeholder="Votre réponse…" onkeydown="if(event.key==='Enter')checkBonus(${stepNum})">
+        <button class="btn-unlock" onclick="checkBonus(${stepNum})">Valider</button>
+      </div>
+      <div class="pw-error" id="bonus-feedback"></div>
+    </div>` : `
+    <div class="unlock-next-card" style="margin-top:12px;">
+      <div class="unlock-next-label">🔑 Débloquer l'étape suivante</div>
+      <div class="unlock-next-sub">Saisissez le mot de passe pour continuer.</div>
+      <div class="pw-row" style="margin-top:8px;">
+        <input class="pw-input" id="pw-next" type="text" placeholder="MOT DE PASSE" onkeydown="if(event.key==='Enter')tryUnlockNext(${stepIdx})">
+        <button class="btn-unlock" onclick="tryUnlockNext(${stepIdx})">Valider</button>
+      </div>
+      <div class="pw-error" id="pw-next-error"></div>
+    </div>
+    <button class="quiz-next-btn" style="margin-top:12px;background:#EF4444;" onclick="restartQuiz(${stepNum})">🔄 Recommencer</button>`}
+  </div>`;
+}
+
+function checkBonus(stepNum){
+  const inp = document.getElementById('bonus-input');
+  const fb = document.getElementById('bonus-feedback');
+  if(!inp || !fb) return;
+  const val = inp.value.trim();
+  if(!val) return;
+  if(val !== '4' && val.toLowerCase() !== 'quatre'){
+    fb.style.color = '#EF4444';
+    fb.textContent = '❌ Mauvaise réponse, réessayez !';
+    inp.value = '';
+    return;
+  }
+  // Unlock next step
+  const t = currentTeam;
+  const order = TEAM_ORDERS[t];
+  const idx = order.findIndex(n => STEPS[n-1] && STEPS[n-1].num === stepNum);
+  if(idx >= 0 && idx < order.length-1){
+    unlocked[key(t, idx+1)] = true;
+  }
+  fb.style.color = '#22C55E';
+  fb.textContent = '✅ Réponse enregistrée — étape suivante déverrouillée !';
+  inp.disabled = true;
+  document.querySelectorAll('#bonus-feedback ~ button, #bonus-input').forEach(el => el.disabled = true);
+  // Re-render to show success card
+  setTimeout(() => {
+    const wrap = document.getElementById('quiz-wrap');
+    if(wrap) wrap.insertAdjacentHTML('afterend', `<div class="success-card" style="margin-top:12px;"><div class="success-icon">✅</div><div class="success-text">Étape suivante déverrouillée !</div></div>`);
+  }, 800);
+}
+
+function restartQuiz(stepNum){
+  clearQuizTimer();
+  quizState[stepNum] = { q:0, score:0, answered:false, mode:null, order:null, started:false };
+  refreshQuiz(stepNum);
+}
+
+
+// ===== HANOI GAME =====
+const HANOI_DISKS = 5;
+const DISK_COLORS = ['#EF4444','#F97316','#EAB308','#22C55E','#3B82F6'];
+const DISK_WIDTHS = [80,68,56,44,32]; // px, index 0 = biggest
+
+function hanoiInit(stepNum){
+  const state = {
+    pegs: [
+      Array.from({length:HANOI_DISKS},(_,i)=>i), // peg 0: all disks (0=biggest)
+      [],
+      []
+    ],
+    selected: null,
+    moves: 0,
+    solved: false
+  };
+  window._hanoiState = window._hanoiState || {};
+  window._hanoiState[stepNum] = state;
+  return state;
+}
+
+function hanoiGet(stepNum){
+  window._hanoiState = window._hanoiState || {};
+  if(!window._hanoiState[stepNum]) hanoiInit(stepNum);
+  return window._hanoiState[stepNum];
+}
+
+function hanoiRender(stepNum){
+  const state = hanoiGet(stepNum);
+  const wrap = document.getElementById('hanoi-wrap');
+  if(!wrap) return;
+  const labels = ['A','B','C'];
+  const pegColors = ['#E0E7FF','#FEF3C7','#DCFCE7'];
+
+  let pegsHtml = state.pegs.map((peg, pi) => {
+    const disksHtml = [...peg].reverse().map(d =>
+      `<div class="hanoi-disk" style="width:${DISK_WIDTHS[d]}px;background:${DISK_COLORS[d]};"></div>`
+    ).join('');
+    const sel = state.selected === pi;
+    return `<div class="hanoi-peg-wrap${sel?' selected':''}" onclick="hanoiClick(${pi},${stepNum})" style="${sel?'background:rgba(251,191,36,.15);border-radius:10px;':''}">
+      <div class="hanoi-rod"></div>
+      <div class="hanoi-disks">${disksHtml}</div>
+      <div class="hanoi-base"></div>
+      <div class="hanoi-peg-label">${labels[pi]}</div>
+    </div>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="hanoi-info">
+      <span>Coups : ${state.moves}</span>
+      <span>Optimal : ${Math.pow(2,HANOI_DISKS)-1} coups</span>
+    </div>
+    <div class="hanoi-board" id="hanoi-board">${pegsHtml}</div>
+    <div class="hanoi-msg${state.solved?' success':''}" id="hanoi-msg">${state.solved ? '🏆 Bravo ! Vous avez résolu la Tour de Hanoï !' : state.selected !== null ? 'Choisissez la tige de destination' : 'Choisissez une tige pour sélectionner le disque du dessus'}</div>
+    <div class="hanoi-btns">
+      <button onclick="hanoiReset(${stepNum})" style="background:var(--c-background-secondary);color:var(--c-text);border:1px solid var(--c-border);">🔄 Recommencer</button>
+    </div>
+    ${state.solved ? renderHanoiSuccess(stepNum) : ''}
+  `;
+}
+
+function hanoiClick(pegIdx, stepNum){
+  const state = hanoiGet(stepNum);
+  if(state.solved) return;
+  const msg = document.getElementById('hanoi-msg');
+
+  if(state.selected === null){
+    if(state.pegs[pegIdx].length === 0){
+      if(msg){ msg.className='hanoi-msg error'; msg.textContent='Cette tige est vide !'; setTimeout(()=>hanoiRender(stepNum),800); }
+      return;
+    }
+    state.selected = pegIdx;
+  } else {
+    if(state.selected === pegIdx){
+      state.selected = null;
+      hanoiRender(stepNum); return;
+    }
+    const from = state.pegs[state.selected];
+    const to = state.pegs[pegIdx];
+    const disk = from[from.length-1];
+    if(to.length > 0 && to[to.length-1] > disk){
+      if(msg){ msg.className='hanoi-msg error'; msg.textContent='Impossible : un grand disque ne peut pas aller sur un petit !'; }
+      state.selected = null;
+      setTimeout(()=>hanoiRender(stepNum),1500); return;
+    }
+    to.push(from.pop());
+    state.moves++;
+    state.selected = null;
+    // Check win: all disks on peg 2
+    if(state.pegs[2].length === HANOI_DISKS) state.solved = true;
+  }
+  hanoiRender(stepNum);
+}
+
+function hanoiReset(stepNum){
+  hanoiInit(stepNum);
+  hanoiRender(stepNum);
+}
+
+function renderHanoiSuccess(stepNum){
+  const t = currentTeam;
+  const order = TEAM_ORDERS[t];
+  const idx = order.findIndex(n => STEPS[n-1] && STEPS[n-1].num === stepNum);
+  if(idx >= 0 && idx < order.length-1) unlocked[key(t, idx+1)] = true;
+  return `<div class="unlock-next-card" style="margin-top:12px;width:100%;">
+    <div class="unlock-next-label">🔑 Débloquer l'étape suivante</div>
+    <div class="unlock-next-sub">Saisissez le mot de passe pour continuer.</div>
+    <div class="pw-row" style="margin-top:8px;">
+      <input class="pw-input" id="pw-next" type="text" placeholder="MOT DE PASSE" onkeydown="if(event.key==='Enter')tryUnlockNext(${idx})">
+      <button class="btn-unlock" onclick="tryUnlockNext(${idx})">Valider</button>
+    </div>
+    <div class="pw-error" id="pw-next-error"></div>
+  </div>`;
+}
+
+function renderHanoi(stepNum){
+  window._hanoiState = window._hanoiState || {};
+  if(!window._hanoiState[stepNum]) hanoiInit(stepNum);
+  return `<div class="info-card hanoi-wrap" id="hanoi-wrap" style="padding-bottom:12px;">
+    <div class="info-card-label">🗼 Tour de Hanoï — 5 disques</div>
+    <div style="font-size:13px;color:var(--c-text2);margin-bottom:10px;line-height:1.6;">
+      Déplacez tous les disques de la tige <strong>A</strong> vers la tige <strong>C</strong>.<br>
+      Règles : un seul disque à la fois, jamais un grand sur un petit.
+    </div>
+    <div class="hanoi-info"><span>Coups : 0</span><span>Optimal : ${Math.pow(2,HANOI_DISKS)-1} coups</span></div>
+    <div class="hanoi-board" id="hanoi-board"></div>
+    <div class="hanoi-msg" id="hanoi-msg">Choisissez une tige pour sélectionner le disque du dessus</div>
+    <div class="hanoi-btns"><button onclick="hanoiReset(${stepNum})" style="background:var(--c-background-secondary);color:var(--c-text);border:1px solid var(--c-border);">🔄 Recommencer</button></div>
+  </div>`;
+}
+
+
+// ===== MEMORY GAME =====
+const MEMORY_WORDS = [
+  'ARKTEOS','BRETAGNE','ÉQUIPE','VALEUR','DOMAINE','PROJET','CLIENT','SUCCÈS',
+  'NATURE','FORÊT','RIVIÈRE','CHÂTEAU','MOULIN','KERKESAUD','SÉMINAIRE','COHÉSION',
+  'TERRASSE','JARDIN','SENTIER','PUZZLE','SOLEIL','BRUME','ROCHER','ÉTANG',
+  'CHÊNE','RENARD','HIBOU','LIERRE','MOUSSE','GRANIT','ALLIANCE','CONFIANCE',
+  'DÉFI','VICTOIRE','PARTAGE','CRÉATIVITÉ','LEADERSHIP','AVENTURE','MISSION','TRÉSOR'
+];
+const MEMORY_MIN_SCORE = 20;
+const MEMORY_TIME = 25;
+let memoryTimer = null;
+
+function memoryGet(stepNum){
+  window._memoryState = window._memoryState || {};
+  if(!window._memoryState[stepNum]){
+    window._memoryState[stepNum] = {
+      phase: 'memorize', // memorize | recall | result
+      timeLeft: MEMORY_TIME,
+      found: [],
+      tried: [],
+      score: 0
+    };
+  }
+  return window._memoryState[stepNum];
+}
+
+function memoryReset(stepNum){
+  clearInterval(memoryTimer);
+  window._memoryState = window._memoryState || {};
+  window._memoryState[stepNum] = {
+    phase: 'memorize', timeLeft: MEMORY_TIME, found: [], tried: [], score: 0
+  };
+  renderMemory(stepNum);
+  memoryStartTimer(stepNum);
+}
+
+function renderMemory(stepNum){
+  const state = memoryGet(stepNum);
+  const wrap = document.getElementById('memory-wrap');
+  if(!wrap) return;
+
+  if(state.phase === 'memorize'){
+    const pct = (state.timeLeft / MEMORY_TIME) * 100;
+    const cls = state.timeLeft <= 5 ? 'danger' : state.timeLeft <= 10 ? 'warning' : '';
+    wrap.innerHTML = `
+      <div class="memory-phase-label">📖 Mémorisez ces 40 mots !</div>
+      <div class="memory-timer-num${cls?' '+cls:''}" id="mem-timer-num">${state.timeLeft}s</div>
+      <div class="memory-timer-bar"><div class="memory-timer-fill${cls?' '+cls:''}" id="mem-timer-fill" style="width:${pct}%"></div></div>
+      <div class="memory-words-grid">
+        ${MEMORY_WORDS.map(w=>`<div class="memory-word">${w}</div>`).join('')}
+      </div>
+    `;
+  } else if(state.phase === 'recall'){
+    wrap.innerHTML = `
+      <div class="memory-phase-label">✍️ Retrouvez un maximum de mots !</div>
+      <div class="memory-score-bar">
+        <span>Score : ${state.score} / 40</span>
+        <span>Objectif : ${MEMORY_MIN_SCORE} pts</span>
+      </div>
+      <div class="memory-input-area">
+        <div class="memory-input-row">
+          <input type="text" id="memory-input" placeholder="Tapez un mot…" onkeydown="if(event.key==='Enter')memorySubmit(${stepNum})" autocomplete="off" autocorrect="off" spellcheck="false">
+          <button onclick="memorySubmit(${stepNum})">Valider</button>
+        </div>
+        <div style="font-size:12px;color:var(--c-text2);" id="memory-feedback"></div>
+        <div style="font-size:12px;color:var(--c-text2);font-weight:600;">Mots trouvés (${state.found.length}) :</div>
+        <div class="memory-found-grid" id="memory-found-grid">
+          ${state.found.map(w=>`<div class="memory-found-chip">${w}</div>`).join('')}
+        </div>
+        <button class="quiz-next-btn" style="background:#8B5CF6;" onclick="memoryFinish(${stepNum})">J'ai terminé → Voir mon score</button>
+      </div>
+    `;
+    setTimeout(()=>document.getElementById('memory-input')?.focus(), 100);
+  } else {
+    memoryRenderResult(stepNum);
+  }
+}
+
+function memoryStartTimer(stepNum){
+  clearInterval(memoryTimer);
+  memoryTimer = setInterval(()=>{
+    const state = memoryGet(stepNum);
+    state.timeLeft--;
+    const pct = (state.timeLeft / MEMORY_TIME) * 100;
+    const cls = state.timeLeft <= 5 ? 'danger' : state.timeLeft <= 10 ? 'warning' : '';
+    const numEl = document.getElementById('mem-timer-num');
+    const fillEl = document.getElementById('mem-timer-fill');
+    if(numEl){ numEl.textContent = state.timeLeft+'s'; numEl.className = 'memory-timer-num'+(cls?' '+cls:''); }
+    if(fillEl){ fillEl.style.width = pct+'%'; fillEl.className = 'memory-timer-fill'+(cls?' '+cls:''); }
+    if(state.timeLeft <= 0){
+      clearInterval(memoryTimer);
+      state.phase = 'recall';
+      renderMemory(stepNum);
+    }
+  }, 1000);
+}
+
+function memorySubmit(stepNum){
+  const inp = document.getElementById('memory-input');
+  const fb = document.getElementById('memory-feedback');
+  if(!inp) return;
+  const val = inp.value.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  inp.value = '';
+  const state = memoryGet(stepNum);
+  if(!val) return;
+  // Check against word list (normalized)
+  const normWords = MEMORY_WORDS.map(w=>w.normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+  const matchIdx = normWords.findIndex(w=>w===val);
+  if(matchIdx === -1){
+    if(fb){ fb.style.color='#EF4444'; fb.textContent='❌ Ce mot n\'est pas dans la liste.'; }
+    return;
+  }
+  const word = MEMORY_WORDS[matchIdx];
+  if(state.found.includes(word)){
+    if(fb){ fb.style.color='#F59E0B'; fb.textContent='⚠️ Déjà trouvé !'; }
+    return;
+  }
+  state.found.push(word);
+  state.score++;
+  if(fb){ fb.style.color='#22C55E'; fb.textContent='✅ Bravo ! +1 point'; }
+  const grid = document.getElementById('memory-found-grid');
+  if(grid) grid.innerHTML = state.found.map(w=>`<div class="memory-found-chip">${w}</div>`).join('');
+  const scoreEl = document.querySelector('.memory-score-bar span');
+  if(scoreEl) scoreEl.textContent = `Score : ${state.score} / 40`;
+}
+
+function memoryFinish(stepNum){
+  const state = memoryGet(stepNum);
+  state.phase = 'result';
+  renderMemory(stepNum);
+}
+
+function memoryRenderResult(stepNum){
+  const state = memoryGet(stepNum);
+  const passed = state.score >= MEMORY_MIN_SCORE;
+  const emoji = state.score === 40 ? '🏆' : passed ? '🎉' : '😅';
+  const t = currentTeam;
+  const order = TEAM_ORDERS[t];
+  const idx = order.findIndex(n => STEPS[n-1] && STEPS[n-1].num === stepNum);
+  if(passed && idx >= 0 && idx < order.length-1) unlocked[key(t, idx+1)] = true;
+  const wrap = document.getElementById('memory-wrap');
+  if(!wrap) return;
+  wrap.innerHTML = `
+    <div class="memory-result">
+      <div class="memory-result-emoji">${emoji}</div>
+      <div class="memory-result-title">${state.score} / 40 mots</div>
+      <div class="memory-result-sub">${passed ? 'Excellente mémoire ! Vous pouvez continuer.' : 'Il faut au moins ${MEMORY_MIN_SCORE} mots pour passer. Courage !'}</div>
+    </div>
+    ${passed ? `
+    <div class="unlock-next-card" style="margin-top:12px;">
+      <div class="unlock-next-label">🔑 Débloquer l'étape suivante</div>
+      <div class="unlock-next-sub">Saisissez le mot de passe pour continuer.</div>
+      <div class="pw-row" style="margin-top:8px;">
+        <input class="pw-input" id="pw-next" type="text" placeholder="MOT DE PASSE" onkeydown="if(event.key==='Enter')tryUnlockNext(${idx})">
+        <button class="btn-unlock" onclick="tryUnlockNext(${idx})">Valider</button>
+      </div>
+      <div class="pw-error" id="pw-next-error"></div>
+    </div>` : `
+    <button class="quiz-next-btn" style="margin-top:12px;background:#EF4444;" onclick="memoryReset(${stepNum})">🔄 Recommencer</button>`}
+  `;
+}
+
+function renderMemoryGame(stepNum){
+  window._memoryState = window._memoryState || {};
+  if(!window._memoryState[stepNum]){
+    window._memoryState[stepNum] = { phase:'memorize', timeLeft:MEMORY_TIME, found:[], tried:[], score:0 };
+  }
+  return `<div class="info-card memory-wrap" id="memory-wrap" style="padding-bottom:12px;">
+    <div class="info-card-label">🧠 Jeu de Mémoire</div>
+    <div style="font-size:13px;color:var(--c-text2);margin-bottom:10px;line-height:1.6;">
+      Mémorisez un maximum de mots en <strong>${MEMORY_TIME} secondes</strong>, puis retrouvez-les.<br>
+      Chaque mot vaut <strong>1 point</strong>. Il faut au moins <strong>${MEMORY_MIN_SCORE} points</strong> pour passer.
+    </div>
+    <div class="memory-phase-label">📖 Mémorisez ces 40 mots !</div>
+    <div class="memory-timer-num" id="mem-timer-num">${MEMORY_TIME}s</div>
+    <div class="memory-timer-bar"><div class="memory-timer-fill" id="mem-timer-fill" style="width:100%"></div></div>
+    <div class="memory-words-grid">
+      ${MEMORY_WORDS.map(w=>`<div class="memory-word">${w}</div>`).join('')}
+    </div>
+  </div>`;
+}
+
+
+// ===== WORD SEARCH GAME =====
+const WS_WORDS = ['EQUIPE','VALEUR','PROJET','MISSION','DOMAINE','BRETAGNE','SUCCES','CLIENT','NATURE','FORET','RIVIERE','SENTIER','CHATEAU','TRESOR'];
+// ARKTEOS is the hidden word (the password)
+const WS_ALL_WORDS = [...WS_WORDS, 'ARKTEOS'];
+const WS_SIZE = 15;
+const WS_DIRS = [[0,1],[1,0],[0,-1],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+function normStr(s){ return s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+
+function wsBuildGrid(){
+  const grid = Array.from({length:WS_SIZE},()=>Array(WS_SIZE).fill(''));
+  const placed = {};
+  // Shuffle words, place ARKTEOS last so it's always placed
+  const words = [...WS_WORDS].sort(()=>Math.random()-.5);
+  words.push('ARKTEOS');
+  for(const word of words){
+    const w = normStr(word);
+    let tries=0, ok=false;
+    while(tries++<500 && !ok){
+      const dir = WS_DIRS[Math.floor(Math.random()*WS_DIRS.length)];
+      const r = Math.floor(Math.random()*WS_SIZE);
+      const c = Math.floor(Math.random()*WS_SIZE);
+      const er = r+dir[0]*(w.length-1), ec = c+dir[1]*(w.length-1);
+      if(er<0||er>=WS_SIZE||ec<0||ec>=WS_SIZE) continue;
+      let can=true;
+      for(let i=0;i<w.length;i++){
+        const cell=grid[r+dir[0]*i][c+dir[1]*i];
+        if(cell && cell!==w[i]){can=false;break;}
+      }
+      if(!can) continue;
+      const cells=[];
+      for(let i=0;i<w.length;i++){
+        grid[r+dir[0]*i][c+dir[1]*i]=w[i];
+        cells.push([r+dir[0]*i,c+dir[1]*i]);
+      }
+      placed[word]={cells,dir,r,c};
+      ok=true;
+    }
+  }
+  const ALPHA='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for(let r=0;r<WS_SIZE;r++) for(let c=0;c<WS_SIZE;c++) if(!grid[r][c]) grid[r][c]=ALPHA[Math.floor(Math.random()*26)];
+  return {grid, placed};
+}
+
+function wsGet(stepNum){
+  window._wsState=window._wsState||{};
+  if(!window._wsState[stepNum]){
+    const {grid,placed}=wsBuildGrid();
+    window._wsState[stepNum]={grid,placed,found:[],selecting:false,firstCell:null,cellColors:Array.from({length:WS_SIZE},()=>Array(WS_SIZE).fill(null))};
+  }
+  return window._wsState[stepNum];
+}
+
+function renderWordSearch(stepNum){
+  const state=wsGet(stepNum);
+  const wrap=document.getElementById('ws-wrap');
+  if(!wrap) return;
+
+  const gridHtml=state.grid.map((row,r)=>row.map((letter,c)=>{
+    const color=state.cellColors[r][c];
+    const sel=state.firstCell&&state.firstCell[0]===r&&state.firstCell[1]===c;
+    let cls='ws-cell';
+    if(color!==null) cls+=' found-'+color;
+    else if(sel) cls+=' selecting';
+    return `<div class="${cls}" data-r="${r}" data-c="${c}" onclick="wsClick(${r},${c},${stepNum})">${letter}</div>`;
+  }).join('')).join('');
+
+  const visibleWords = WS_WORDS; // ARKTEOS is hidden
+  const wordListHtml=visibleWords.map(w=>`<div class="ws-word-chip${state.found.includes(w)?' found':''}">${w}</div>`).join('');
+  const foundVisible=state.found.filter(w=>w!=='ARKTEOS').length;
+  const allFoundVisible=foundVisible===WS_WORDS.length;
+  const arkteoFound=state.found.includes('ARKTEOS');
+
+  wrap.innerHTML=`
+    <div class="ws-progress">${foundVisible} / ${WS_WORDS.length} mots trouvés${arkteoFound?' + 🏆 ARKTEOS !':''}</div>
+    <div class="ws-grid">${gridHtml}</div>
+    <div class="ws-word-list">${wordListHtml}</div>
+    ${allFoundVisible && !arkteoFound ? '<div style="font-size:13px;font-weight:600;color:#8B5CF6;text-align:center;">🔍 Il reste un mot caché… saurez-vous le trouver ?</div>' : ''}
+    ${arkteoFound ? renderWsSuccess(stepNum) : ''}
+  `;
+}
+
+function wsClick(r,c,stepNum){
+  const state=wsGet(stepNum);
+  if(!state.firstCell){
+    state.firstCell=[r,c];
+  } else {
+    const [r0,c0]=state.firstCell;
+    state.firstCell=null;
+    wsTrySelect(r0,c0,r,c,stepNum);
+    return;
+  }
+  renderWordSearch(stepNum);
+}
+
+function wsCellsBetween(r0,c0,r1,c1){
+  const dr=r1-r0,dc=c1-c0;
+  const len=Math.max(Math.abs(dr),Math.abs(dc));
+  if(len===0) return [[r0,c0]];
+  if(dr!==0&&dc!==0&&Math.abs(dr)!==Math.abs(dc)) return null;
+  const sr=dr===0?0:dr/Math.abs(dr),sc=dc===0?0:dc/Math.abs(dc);
+  const cells=[];
+  for(let i=0;i<=len;i++) cells.push([r0+sr*i,c0+sc*i]);
+  return cells;
+}
+
+function wsTrySelect(r0,c0,r1,c1,stepNum){
+  const state=wsGet(stepNum);
+  const cells=wsCellsBetween(r0,c0,r1,c1);
+  if(!cells){renderWordSearch(stepNum);return;}
+  const str=cells.map(([r,c])=>state.grid[r][c]).join('');
+  const strRev=str.split('').reverse().join('');
+  const colorIdx=state.found.filter(w=>w!=='ARKTEOS').length % 14;
+  for(const word of WS_ALL_WORDS){
+    const w=normStr(word);
+    if((str===w||strRev===w)&&!state.found.includes(word)){
+      state.found.push(word);
+      cells.forEach(([r,c])=>state.cellColors[r][c]=state.found.indexOf(word)-1<0?0:state.found.indexOf(word)-1);
+      break;
+    }
+  }
+  renderWordSearch(stepNum);
+}
+
+function renderWsSuccess(stepNum){
+  const state=wsGet(stepNum);
+  const t=currentTeam;
+  const order=TEAM_ORDERS[t];
+  const idx=order.findIndex(n=>STEPS[n-1]&&STEPS[n-1].num===stepNum);
+  if(idx>=0&&idx<order.length-1) unlocked[key(t,idx+1)]=true;
+  return `<div class="unlock-next-card" style="margin-top:12px;">
+    <div class="unlock-next-label">🏆 Bravo ! Mot secret trouvé !</div>
+    <div class="unlock-next-sub">Vous avez trouvé <strong>ARKTEOS</strong> — c'est le mot de passe pour continuer !</div>
+    <div class="pw-row" style="margin-top:8px;">
+      <input class="pw-input" id="pw-next" type="text" placeholder="MOT DE PASSE" onkeydown="if(event.key==='Enter')tryUnlockNext(${idx})">
+      <button class="btn-unlock" onclick="tryUnlockNext(${idx})">Valider</button>
+    </div>
+    <div class="pw-error" id="pw-next-error"></div>
+  </div>`;
+}
+
+function renderWsGame(stepNum){
+  const t=currentTeam;
+  const order=TEAM_ORDERS[t];
+  const idx=order.findIndex(n=>STEPS[n-1]&&STEPS[n-1].num===stepNum);
+  const wordListHtml=WS_ALL_WORDS.map(w=>`<div class="ws-word-chip">${w==='ARKTEOS'?'??? (mot secret)':w}</div>`).join('');
+  return `<div class="info-card ws-wrap" id="ws-wrap" style="padding-bottom:12px;">
+    <div class="info-card-label">🔍 Mot Mêlé — 15×15</div>
+    <div style="font-size:13px;color:var(--c-text2);margin-bottom:10px;line-height:1.6;">
+      La grille est imprimée. Trouvez les <strong>14 mots</strong> + le <strong>mot secret</strong>.<br>
+      Une fois trouvés, saisissez le mot secret ci-dessous pour passer à la suite.
+    </div>
+    <div class="ws-word-list" style="margin-bottom:12px;">${wordListHtml}</div>
+    <div class="unlock-next-card">
+      <div class="unlock-next-label">🔑 Mot secret trouvé ?</div>
+      <div class="unlock-next-sub">Saisissez le mot caché dans la grille pour continuer.</div>
+      <div class="pw-row" style="margin-top:8px;">
+        <input class="pw-input" id="pw-next" type="text" placeholder="MOT SECRET" onkeydown="if(event.key==='Enter')tryUnlockNext(${idx})">
+        <button class="btn-unlock" onclick="tryUnlockNext(${idx})">Valider</button>
+      </div>
+      <div class="pw-error" id="pw-next-error"></div>
+    </div>
+  </div>`;
+}
+
+</script>
+</body>
+</html>
