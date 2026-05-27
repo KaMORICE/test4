@@ -874,10 +874,10 @@ const STEPS = [
         correct: 0
       },
       {
-        question: "Qui a gagné la Palme d'or à Cannes en 2025 ?",
-        duo: ["It Was Just an Accident", "La Substance"],
-        carre: ["It Was Just an Accident", "La Substance", "Emilia Pérez", "The Brutalist"],
-        cash: "accident",
+        question: "Qui a gagné la Palme d'or à Cannes en 2026 ?",
+        duo: ["Fjord", "Minotaure"],
+        carre: ["Fjord", "Minotaure", "It Was Just an Accident", "Paper Tiger"],
+        cash: "fjord",
         correct: 0
       }
     ]
@@ -1122,6 +1122,17 @@ function renderStep(idx) {
         ${step.image ? '<img src="'+step.image+'" style="width:100%;border-radius:10px;margin-top:12px;">' : ''}
       </div>`;
     }
+    if(step.num === 3) {
+      html += `
+      <div class="info-card hint-card" id="hint-gps-card" style="display:none;">
+        <div class="info-card-label">📍 Indice GPS</div>
+        <div class="info-card-text" style="font-family:monospace;">47.30426472089826, -2.390994701530825</div>
+      </div>
+      <div id="hint-timer-wrap" style="margin-top:12px;text-align:center;padding:10px;background:rgba(251,191,36,.08);border-radius:10px;">
+        <div id="hint-countdown-msg" style="font-size:13px;color:var(--amber);margin-bottom:6px;">💡 Indice GPS disponible dans <span id="hint-countdown">3:00</span></div>
+        <button class="btn-unlock" id="hint-reveal-btn" style="display:none;" onclick="document.getElementById('hint-gps-card').style.display='block';document.getElementById('hint-timer-wrap').style.display='none';">Afficher l'indice GPS</button>
+      </div>`;
+    }
     html += `
       ${step.mecanique && idx > 1 ? `
       <div class="info-card hint-card">
@@ -1132,6 +1143,29 @@ function renderStep(idx) {
     `;
     // Timer starts only when user clicks 'C'est parti'
     if(step.quiz){ setTimeout(()=>{ const b=document.getElementById('btn-cest-parti'); if(b) b.scrollIntoView({behavior:'smooth',block:'nearest'}); },100); }
+    // GPS hint countdown for step 3
+    if(step.num === 3) {
+      if(window._hintTimerInterval) clearInterval(window._hintTimerInterval);
+      let remaining = 180;
+      window._hintTimerInterval = setInterval(() => {
+        remaining--;
+        const el = document.getElementById('hint-countdown');
+        const btn = document.getElementById('hint-reveal-btn');
+        if(!el) { clearInterval(window._hintTimerInterval); return; }
+        if(remaining <= 0) {
+          clearInterval(window._hintTimerInterval);
+          const wrap = document.getElementById('hint-timer-wrap');
+          if(wrap) { wrap.querySelector('div').style.display='none'; }
+          if(btn) btn.style.display='inline-block';
+        } else {
+          const m = Math.floor(remaining/60);
+          const s = remaining%60;
+          el.textContent = m+':'+(s<10?'0':'')+s;
+        }
+      }, 1000);
+    } else {
+      if(window._hintTimerInterval) { clearInterval(window._hintTimerInterval); window._hintTimerInterval = null; }
+    }
 
     if(idx < order.length-1) {
       const nextUnlk = isUnlocked(t,idx+1);
@@ -1223,7 +1257,7 @@ function tryUnlockMulti(idx) {
   const allFound = expected.every(e => inputs.some(inp => inp === e));
   if(allFound) {
     doUnlock(currentTeam, idx+1);
-    renderStep(idx);
+    setTimeout(()=>renderStep(idx+1), 600);
   } else {
     [0,1,2,3].forEach(i => {
       const inp = document.getElementById('pw-'+i);
@@ -1246,6 +1280,7 @@ const PASSWORD_ALIASES = {
   '5_5': ['baby shark dance', 'babysharkdance', 'baby shark', 'babysharky'],
   '6_5': ['baby shark dance', 'babysharkdance', 'baby shark', 'babysharky'],
   '7_5': ['baby shark dance', 'babysharkdance', 'baby shark', 'babysharky'],
+  '0_6': ['reservoir d eau', 'reservoir eau', 'réservoir d eau', 'réservoir eau'],
   '0_7': ['travail d equipe', 'travail equipe', 'travail d equipe', 'travail dequipe'],
   '0_8': ['quatre'],
 };
@@ -1266,7 +1301,7 @@ function tryUnlock(idx) {
   const val = normalize(document.getElementById('pw-field')?.value||'');
   if(isValidPassword(t, idx, val)) {
     doUnlock(t,idx);
-    renderStep(idx);
+    setTimeout(()=>renderStep(idx), 600);
   } else {
     const input = document.getElementById('pw-field');
     const err = document.getElementById('pw-error');
@@ -1280,7 +1315,7 @@ function tryUnlockNext(idx) {
   const val = normalize(document.getElementById('pw-next')?.value||'');
   if(isValidPassword(t, idx+1, val)) {
     doUnlock(t,idx+1);
-    renderStep(idx);
+    setTimeout(()=>renderStep(idx+1), 600);
   } else {
     const input = document.getElementById('pw-next');
     const err = document.getElementById('pw-next-error');
@@ -1467,11 +1502,12 @@ function answerMCQ(idx, stepNum){
 function answerCash(stepNum){
   const state = quizState[stepNum];
   if(state.answered) return;
+  const val = (document.getElementById('cash-input')?.value||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  if(val.length === 0) return;
   state.answered = true;
   const step = STEPS.find(s=>s.num===stepNum);
   const order = getQuizOrder(step, state);
   const q = step.quiz[order[state.q]];
-  const val = (document.getElementById('cash-input')?.value||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const expected = q.cash.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   if(val.includes(expected) || expected.includes(val)){
     state.score += 5;
